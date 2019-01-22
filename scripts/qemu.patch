@@ -1,0 +1,939 @@
+From 0ae6011e88a9a649ac02d78d5aec8eb79a904b31 Mon Sep 17 00:00:00 2001
+From: Ilia Lebedev <ilebedev@mit.edu>
+Date: Thu, 17 Jan 2019 11:45:24 -0500
+Subject: [PATCH] Sanctum model for QEMU
+
+---
+ disas/riscv.c              |  14 ++
+ hw/riscv/Makefile.objs     |   2 +
+ hw/riscv/puf.c             | 129 ++++++++++++++++
+ hw/riscv/sanctum.c         | 291 +++++++++++++++++++++++++++++++++++++
+ include/hw/riscv/puf.h     |  32 ++++
+ include/hw/riscv/sanctum.h |  46 ++++++
+ target/riscv/cpu.h         |  36 +++++
+ target/riscv/cpu_bits.h    |  46 ++++++
+ target/riscv/cpu_helper.c  |  28 +++-
+ target/riscv/csr.c         | 135 +++++++++++++++++
+ target/riscv/trng.h        |  10 ++
+ 11 files changed, 768 insertions(+), 1 deletion(-)
+ create mode 100644 hw/riscv/puf.c
+ create mode 100644 hw/riscv/sanctum.c
+ create mode 100644 include/hw/riscv/puf.h
+ create mode 100644 include/hw/riscv/sanctum.h
+ create mode 100644 target/riscv/trng.h
+
+diff --git a/disas/riscv.c b/disas/riscv.c
+index 7fd1019623..9003918e79 100644
+--- a/disas/riscv.c
++++ b/disas/riscv.c
+@@ -1245,6 +1245,17 @@ static const char *csr_name(int csrno)
+     case 0x07b0: return "dcsr";
+     case 0x07b1: return "dpc";
+     case 0x07b2: return "dscratch";
++    // <SANCTUM>
++      case 0x07c0: return "mevbase";
++      case 0x07c1: return "mevmask";
++      case 0x07c2: return "meatp";
++      case 0x07c3: return "mmrbm";
++      case 0x07c4: return "memrbm";
++      case 0x07c5: return "mparbase";
++      case 0x07c6: return "mparmask";
++      case 0x07c7: return "meparbase";
++      case 0x07c8: return "meparmask";
++    // </SANCTUM>
+     case 0x0b00: return "mcycle";
+     case 0x0b01: return "mtime";
+     case 0x0b02: return "minstret";
+@@ -1315,6 +1326,9 @@ static const char *csr_name(int csrno)
+     case 0x0c80: return "cycleh";
+     case 0x0c81: return "timeh";
+     case 0x0c82: return "instreth";
++    // <SANCTUM>
++      case 0x0cc0: return "trng";
++    // </SANCTUM>
+     case 0x0d00: return "scycle";
+     case 0x0d01: return "stime";
+     case 0x0d02: return "sinstret";
+diff --git a/hw/riscv/Makefile.objs b/hw/riscv/Makefile.objs
+index 1dde01d39d..3fcb28d80a 100644
+--- a/hw/riscv/Makefile.objs
++++ b/hw/riscv/Makefile.objs
+@@ -1,5 +1,6 @@
+ obj-y += riscv_htif.o
+ obj-y += riscv_hart.o
++obj-y += sanctum.o
+ obj-y += sifive_e.o
+ obj-y += sifive_clint.o
+ obj-y += sifive_prci.o
+@@ -7,5 +8,6 @@ obj-y += sifive_plic.o
+ obj-y += sifive_test.o
+ obj-y += sifive_u.o
+ obj-y += sifive_uart.o
++obj-y += puf.o
+ obj-y += spike.o
+ obj-y += virt.o
+diff --git a/hw/riscv/puf.c b/hw/riscv/puf.c
+new file mode 100644
+index 0000000000..1a072cfad9
+--- /dev/null
++++ b/hw/riscv/puf.c
+@@ -0,0 +1,129 @@
++/*
++ * PUF
++ */
++
++#include "qemu/osdep.h"
++#include "qemu/log.h"
++#include "hw/sysbus.h"
++#include "target/riscv/cpu.h"
++#include "hw/riscv/puf.h"
++#include "qemu/timer.h"
++
++/* CPU wants to read the puf */
++static uint64_t puf_read(void *opaque, hwaddr addr, unsigned size)
++{
++    PUFState *puf = opaque;
++
++    /* reads must be 8 byte aligned words */
++    if ((addr & 0x7) != 0 || size != 8) {
++        qemu_log_mask(LOG_GUEST_ERROR,
++            "clint: invalid read size %u: 0x%" HWADDR_PRIx "\n", size, addr);
++        return 0L;
++    }
++
++    if (addr == PUF_SELECT) {
++        /* puf_select */
++        return puf->puf_select;
++    } else if (addr == PUF_READOUT) {
++        /* puf_readout */
++        return 0xDEADBEEFL; /* TODO: implement some function of persona and puf_select and puf_disable[0]*/
++    } else if (addr == PUF_DISABLE) {
++        /* puf_disable */
++        return puf->puf_disable;
++    } else {
++        qemu_log_mask(LOG_GUEST_ERROR,
++            "clint: invalid read: 0x%" HWADDR_PRIx "\n", addr);
++    }
++
++    return 0L;
++}
++
++/* CPU wrote to the puf */
++static void puf_write(void *opaque, hwaddr addr, uint64_t value,
++        unsigned size)
++{
++    PUFState *puf = opaque;
++
++    /* writes must be 4 byte aligned words */
++    if ((addr & 0x7) != 0 || size != 8) {
++        qemu_log_mask(LOG_GUEST_ERROR,
++            "clint: invalid write size %u: 0x%" HWADDR_PRIx "\n", size, addr);
++        return;
++    }
++
++    if (addr >= PUF_SELECT) {
++        /* puf_select */
++        puf->puf_select = value;
++        return;
++    } else if (addr >= PUF_READOUT) {
++        /* puf_readout writes are ignored */
++        return;
++    } else if (addr == PUF_DISABLE) {
++        /* puf_disable is one bit long, and cannot be cleared */
++        puf->puf_disable = (puf->puf_disable | value) & 0x1;
++        return;
++    } else {
++        qemu_log_mask(LOG_GUEST_ERROR,
++            "clint: invalid write: 0x%" HWADDR_PRIx "\n", addr);
++    }
++}
++
++static const MemoryRegionOps puf_ops = {
++    .read = puf_read,
++    .write = puf_write,
++    .endianness = DEVICE_LITTLE_ENDIAN,
++    .valid = {
++        .min_access_size = 8,
++        .max_access_size = 8
++    }
++};
++
++static Property puf_properties[] = {
++    DEFINE_PROP_UINT64("persona", PUFState, persona, 0),
++    DEFINE_PROP_UINT64("puf_select", PUFState, puf_select, 0),
++    DEFINE_PROP_UINT32("puf_disable", PUFState, puf_disable, 0),
++    DEFINE_PROP_END_OF_LIST(),
++};
++
++static void puf_realize(DeviceState *dev, Error **errp)
++{
++    PUFState *s = PUF(dev);
++    memory_region_init_io(&s->mmio, OBJECT(dev), &puf_ops, s,
++                          TYPE_PUF, 0x20);
++    sysbus_init_mmio(SYS_BUS_DEVICE(dev), &s->mmio);
++}
++
++static void puf_class_init(ObjectClass *klass, void *data)
++{
++    DeviceClass *dc = DEVICE_CLASS(klass);
++    dc->realize = puf_realize;
++    dc->props = puf_properties;
++}
++
++static const TypeInfo puf_info = {
++    .name          = TYPE_PUF,
++    .parent        = TYPE_SYS_BUS_DEVICE,
++    .instance_size = sizeof(PUFState),
++    .class_init    = puf_class_init,
++};
++
++static void puf_register_types(void)
++{
++    type_register_static(&puf_info);
++}
++
++type_init(puf_register_types)
++
++/*
++ * Create PUF device.
++ */
++DeviceState *puf_create(hwaddr addr, hwaddr size, uint64_t persona)
++{
++    DeviceState *dev = qdev_create(NULL, TYPE_PUF);
++    qdev_prop_set_uint64(dev, "persona", persona);
++    qdev_prop_set_uint64(dev, "puf_select", 0);
++    qdev_prop_set_uint32(dev, "puf_disable", false);
++    qdev_init_nofail(dev);
++    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, addr);
++    return dev;
++}
+diff --git a/hw/riscv/sanctum.c b/hw/riscv/sanctum.c
+new file mode 100644
+index 0000000000..14d8ef69de
+--- /dev/null
++++ b/hw/riscv/sanctum.c
+@@ -0,0 +1,291 @@
++/*
++ * QEMU RISC-V Sanctum Emulator
++ *
++ * Copyright (c) 2019 Ilia Lebedev, MIT
++ *
++ * This provides a RISC-V Board with the following devices:
++ *
++ * 0) HTIF Console and Poweroff
++ * 1) CLINT (Timer and IPI)
++ * 2) PLIC (Platform Level Interrupt Controller)
++ * 3) PUF Model (Platform Level Interrupt Controller)
++ * 4) ELF Loader (Platform Level Interrupt Controller)
++ * 5) Boot ROM initialized from "firmware" file, given as argument
++ *
++ * This program is free software; you can redistribute it and/or modify it
++ * under the terms and conditions of the GNU General Public License,
++ * version 2 or later, as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++ * more details.
++ *
++ * You should have received a copy of the GNU General Public License along with
++ * this program.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include "qemu/osdep.h"
++#include "qemu/log.h"
++#include "qemu/error-report.h"
++#include "qapi/error.h"
++#include "hw/hw.h"
++#include "hw/boards.h"
++#include "hw/loader.h"
++#include "hw/sysbus.h"
++#include "target/riscv/cpu.h"
++#include "hw/riscv/puf.h"
++#include "hw/riscv/riscv_htif.h"
++#include "hw/riscv/riscv_hart.h"
++#include "hw/riscv/sifive_clint.h"
++#include "hw/riscv/sanctum.h"
++#include "chardev/char.h"
++#include "sysemu/arch_init.h"
++#include "sysemu/device_tree.h"
++#include "exec/address-spaces.h"
++#include "elf.h"
++
++#include <libfdt.h>
++
++static const struct MemmapEntry {
++    hwaddr base;
++    hwaddr size;
++} sanctum_memmap[] = {
++    [SANCTUM_MROM] =     {     0x1000,    0x11000 },
++    [SANCTUM_PUF] =      {   0x200000,       0x20 },
++    [SANCTUM_ELFLD] =    {  0x1000000,     0x1000 },
++    [SANCTUM_CLINT] =    {  0x2000000,    0x10000 },
++    [SANCTUM_DRAM] =     { 0x80000000,        0x0 },
++};
++
++static uint64_t load_kernel(const char *kernel_filename)
++{
++    uint64_t kernel_entry, kernel_high;
++
++    if (load_elf_ram_sym(kernel_filename, NULL, NULL,
++            &kernel_entry, NULL, &kernel_high, 0, EM_RISCV, 1, 0,
++            NULL, true, htif_symbol_callback) < 0) {
++        error_report("could not load kernel '%s'", kernel_filename);
++        exit(1);
++    }
++    return kernel_entry;
++}
++
++static void create_fdt(SanctumState *s, const struct MemmapEntry *memmap,
++    uint64_t mem_size, const char *cmdline)
++{
++    void *fdt;
++    int cpu;
++    uint32_t *cells;
++    char *nodename;
++
++    fdt = s->fdt = create_device_tree(&s->fdt_size);
++    if (!fdt) {
++        error_report("create_device_tree() failed");
++        exit(1);
++    }
++
++    qemu_fdt_setprop_string(fdt, "/", "model", "ucbbar,sanctum-bare,qemu");
++    qemu_fdt_setprop_string(fdt, "/", "compatible", "ucbbar,spike-bare-dev");
++    qemu_fdt_setprop_cell(fdt, "/", "#size-cells", 0x2);
++    qemu_fdt_setprop_cell(fdt, "/", "#address-cells", 0x2);
++
++    qemu_fdt_add_subnode(fdt, "/htif");
++    qemu_fdt_setprop_string(fdt, "/htif", "compatible", "ucb,htif0");
++
++    qemu_fdt_add_subnode(fdt, "/soc");
++    qemu_fdt_setprop(fdt, "/soc", "ranges", NULL, 0);
++    qemu_fdt_setprop_string(fdt, "/soc", "compatible", "simple-bus");
++    qemu_fdt_setprop_cell(fdt, "/soc", "#size-cells", 0x2);
++    qemu_fdt_setprop_cell(fdt, "/soc", "#address-cells", 0x2);
++
++    nodename = g_strdup_printf("/memory@%lx",
++        (long)memmap[SANCTUM_DRAM].base);
++    qemu_fdt_add_subnode(fdt, nodename);
++    qemu_fdt_setprop_cells(fdt, nodename, "reg",
++        memmap[SANCTUM_DRAM].base >> 32, memmap[SANCTUM_DRAM].base,
++        mem_size >> 32, mem_size);
++    qemu_fdt_setprop_string(fdt, nodename, "device_type", "memory");
++    g_free(nodename);
++
++    qemu_fdt_add_subnode(fdt, "/cpus");
++    qemu_fdt_setprop_cell(fdt, "/cpus", "timebase-frequency",
++        SIFIVE_CLINT_TIMEBASE_FREQ);
++    qemu_fdt_setprop_cell(fdt, "/cpus", "#size-cells", 0x0);
++    qemu_fdt_setprop_cell(fdt, "/cpus", "#address-cells", 0x1);
++
++    for (cpu = s->soc.num_harts - 1; cpu >= 0; cpu--) {
++        nodename = g_strdup_printf("/cpus/cpu@%d", cpu);
++        char *intc = g_strdup_printf("/cpus/cpu@%d/interrupt-controller", cpu);
++        char *isa = riscv_isa_string(&s->soc.harts[cpu]);
++        qemu_fdt_add_subnode(fdt, nodename);
++        qemu_fdt_setprop_cell(fdt, nodename, "clock-frequency",
++                              SANCTUM_CLOCK_FREQ);
++        qemu_fdt_setprop_string(fdt, nodename, "mmu-type", "riscv,sv48");
++        qemu_fdt_setprop_string(fdt, nodename, "riscv,isa", isa);
++        qemu_fdt_setprop_string(fdt, nodename, "compatible", "riscv");
++        qemu_fdt_setprop_string(fdt, nodename, "status", "okay");
++        qemu_fdt_setprop_cell(fdt, nodename, "reg", cpu);
++        qemu_fdt_setprop_string(fdt, nodename, "device_type", "cpu");
++        qemu_fdt_add_subnode(fdt, intc);
++        qemu_fdt_setprop_cell(fdt, intc, "phandle", 1);
++        qemu_fdt_setprop_cell(fdt, intc, "linux,phandle", 1);
++        qemu_fdt_setprop_string(fdt, intc, "compatible", "riscv,cpu-intc");
++        qemu_fdt_setprop(fdt, intc, "interrupt-controller", NULL, 0);
++        qemu_fdt_setprop_cell(fdt, intc, "#interrupt-cells", 1);
++        g_free(isa);
++        g_free(intc);
++        g_free(nodename);
++    }
++
++    cells =  g_new0(uint32_t, s->soc.num_harts * 4);
++    for (cpu = 0; cpu < s->soc.num_harts; cpu++) {
++        nodename =
++            g_strdup_printf("/cpus/cpu@%d/interrupt-controller", cpu);
++        uint32_t intc_phandle = qemu_fdt_get_phandle(fdt, nodename);
++        cells[cpu * 4 + 0] = cpu_to_be32(intc_phandle);
++        cells[cpu * 4 + 1] = cpu_to_be32(IRQ_M_SOFT);
++        cells[cpu * 4 + 2] = cpu_to_be32(intc_phandle);
++        cells[cpu * 4 + 3] = cpu_to_be32(IRQ_M_TIMER);
++        g_free(nodename);
++    }
++    nodename = g_strdup_printf("/soc/clint@%lx",
++        (long)memmap[SANCTUM_CLINT].base);
++    qemu_fdt_add_subnode(fdt, nodename);
++    qemu_fdt_setprop_string(fdt, nodename, "compatible", "riscv,clint0");
++    qemu_fdt_setprop_cells(fdt, nodename, "reg",
++        0x0, memmap[SANCTUM_CLINT].base,
++        0x0, memmap[SANCTUM_CLINT].size);
++    qemu_fdt_setprop(fdt, nodename, "interrupts-extended",
++        cells, s->soc.num_harts * sizeof(uint32_t) * 4);
++    g_free(cells);
++    g_free(nodename);
++
++    if (cmdline) {
++        qemu_fdt_add_subnode(fdt, "/chosen");
++        qemu_fdt_setprop_string(fdt, "/chosen", "bootargs", cmdline);
++    }
++ }
++
++static void sanctum_board_init(MachineState *machine)
++{
++    const struct MemmapEntry *memmap = sanctum_memmap;
++
++    SanctumState *s = g_new0(SanctumState, 1);
++    MemoryRegion *system_memory = get_system_memory();
++    MemoryRegion *main_mem = g_new(MemoryRegion, 1);
++    MemoryRegion *mask_rom = g_new(MemoryRegion, 1);
++    MemoryRegion *elfld_rom = g_new(MemoryRegion, 1);
++    int i;
++
++    /* Initialize SOC */
++    object_initialize_child(OBJECT(machine), "soc", &s->soc, sizeof(s->soc),
++                            TYPE_RISCV_HART_ARRAY, &error_abort, NULL);
++    object_property_set_str(OBJECT(&s->soc), SANCTUM_CPU, "cpu-type",
++                            &error_abort);
++    object_property_set_int(OBJECT(&s->soc), smp_cpus, "num-harts",
++                            &error_abort);
++    object_property_set_bool(OBJECT(&s->soc), true, "realized",
++                            &error_abort);
++
++    /* register system main memory (actual RAM) */
++    memory_region_init_ram(main_mem, NULL, "riscv.sanctum.ram",
++                           machine->ram_size, &error_fatal);
++    memory_region_add_subregion(system_memory, memmap[SANCTUM_DRAM].base,
++        main_mem);
++
++    /* create device tree */
++    create_fdt(s, memmap, machine->ram_size, machine->kernel_cmdline);
++
++    /* boot rom */
++    memory_region_init_rom(mask_rom, NULL, "riscv.sanctum.mrom",
++                           memmap[SANCTUM_MROM].size, &error_fatal);
++    memory_region_add_subregion(system_memory, memmap[SANCTUM_MROM].base,
++                                mask_rom);
++
++    if (machine->kernel_filename) {
++        load_kernel(machine->kernel_filename);
++    }
++
++    /* reset vector */
++    char *reset_vec;
++    uint32_t reset_vec_size = 0;
++
++    uint32_t default_reset_vec[1] = {
++        0x0000006F,                  /* 1:  j  x0, -2 # Loop forever; next time, specify a bootloader binary */
++    };
++
++    /* the reset vector is in little_endian byte order */
++    for (i = 0; i < sizeof(default_reset_vec) >> 2; i++) {
++        default_reset_vec[i] = cpu_to_le32(default_reset_vec[i]);
++    }
++
++    /* Load custom bootloader, if requested, else use default above */
++    if (machine->firmware) {
++        FILE *bootloader_file;
++
++        bootloader_file = fopen ( machine->firmware , "rb" );
++        if( !bootloader_file ) perror("Failed to open the bootloader file."),exit(1);
++
++        fseek( bootloader_file , 0L , SEEK_END);
++        reset_vec_size = ftell( bootloader_file );
++        rewind( bootloader_file );
++
++        reset_vec = (char*)malloc(reset_vec_size * sizeof(char));
++        if( !reset_vec ) fclose(bootloader_file),fputs("Failed to allocate space to read the bootloader file.",stderr),exit(1);
++
++        if( 1!=fread( reset_vec , reset_vec_size, 1 , bootloader_file) )
++            fclose(bootloader_file),free(reset_vec),fputs("Failed to read entire bootloader file.",stderr),exit(1);
++
++        fclose(bootloader_file);
++    } else {
++        reset_vec = (char*)default_reset_vec;
++        reset_vec_size = sizeof(default_reset_vec);
++    }
++
++    /* copy in the reset vector */
++    rom_add_blob_fixed_as("mrom.reset", reset_vec, reset_vec_size,
++                               memmap[SANCTUM_MROM].base, &address_space_memory);
++
++    /* copy in the device tree */
++    if (fdt_pack(s->fdt) || fdt_totalsize(s->fdt) >
++            memmap[SANCTUM_MROM].size - reset_vec_size) {
++        error_report("not enough space to store device-tree");
++        exit(1);
++    }
++    qemu_fdt_dumpdtb(s->fdt, fdt_totalsize(s->fdt));
++    rom_add_blob_fixed_as("mrom.fdt", s->fdt, fdt_totalsize(s->fdt),
++                          memmap[SANCTUM_MROM].base + reset_vec_size,
++                          &address_space_memory);
++
++    /* PUF */
++    puf_create(memmap[SANCTUM_PUF].base, memmap[SANCTUM_PUF].size,
++               0xDEADBEEFABADCAFEL);
++
++    /* ELF loader module */
++    memory_region_init_rom(elfld_rom, NULL, "riscv.sanctum.elfldr",
++                           memmap[SANCTUM_ELFLD].size, &error_fatal);
++    memory_region_add_subregion(system_memory, memmap[SANCTUM_ELFLD].base,
++                                elfld_rom);
++    uint64_t oxo[2] = { 0x0L, 0x0L };
++    rom_add_blob_fixed_as("elfldr.status", oxo, 0x10,
++                          memmap[SANCTUM_ELFLD].base,
++                          &address_space_memory);
++
++    /* initialize HTIF using symbols found in load_kernel */
++    htif_mm_init(system_memory, mask_rom, &s->soc.harts[0].env, serial_hd(0));
++
++    /* Core Local Interruptor (timer and IPI) */
++    sifive_clint_create(memmap[SANCTUM_CLINT].base, memmap[SANCTUM_CLINT].size,
++        smp_cpus, SIFIVE_SIP_BASE, SIFIVE_TIMECMP_BASE, SIFIVE_TIME_BASE);
++}
++
++static void sanctum_machine_init(MachineClass *mc)
++{
++    mc->desc = "RISC-V Sanctum Board";
++    mc->init = sanctum_board_init;
++    mc->max_cpus = 1;
++    mc->is_default = 1;
++}
++
++DEFINE_MACHINE("sanctum", sanctum_machine_init)
+diff --git a/include/hw/riscv/puf.h b/include/hw/riscv/puf.h
+new file mode 100644
+index 0000000000..724a893c5e
+--- /dev/null
++++ b/include/hw/riscv/puf.h
+@@ -0,0 +1,32 @@
++/*
++ * PUF
++ */
++
++#ifndef HW_PUF_H
++#define HW_PUF_H
++
++#define TYPE_PUF "riscv.puf"
++
++#define PUF(obj) \
++    OBJECT_CHECK(PUFState, (obj), TYPE_PUF)
++
++typedef struct PUFState {
++    /*< private >*/
++    SysBusDevice parent_obj;
++
++    /*< public >*/
++    MemoryRegion mmio;
++    uint64_t persona;
++    uint64_t puf_select;
++    uint32_t puf_disable;
++} PUFState;
++
++DeviceState *puf_create(hwaddr addr, hwaddr size, uint64_t persona);
++
++enum {
++    PUF_SELECT     = 0x00,
++    PUF_READOUT    = 0x08,
++    PUF_DISABLE    = 0x10
++};
++
++#endif
+diff --git a/include/hw/riscv/sanctum.h b/include/hw/riscv/sanctum.h
+new file mode 100644
+index 0000000000..671ce3c1fb
+--- /dev/null
++++ b/include/hw/riscv/sanctum.h
+@@ -0,0 +1,46 @@
++/*
++ * Sanctum machine interface
++ *
++ * Copyright (c) 2019 Ilia Lebedev, MIT.
++ *
++ * This program is free software; you can redistribute it and/or modify it
++ * under the terms and conditions of the GNU General Public License,
++ * version 2 or later, as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
++ * more details.
++ *
++ * You should have received a copy of the GNU General Public License along with
++ * this program.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#ifndef HW_RISCV_SANCTUM_H
++#define HW_RISCV_SANCTUM_H
++
++typedef struct {
++    /*< private >*/
++    SysBusDevice parent_obj;
++
++    /*< public >*/
++    RISCVHartArrayState soc;
++    void *fdt;
++    int fdt_size;
++} SanctumState;
++
++enum {
++    SANCTUM_MROM,
++    SANCTUM_PUF,
++    SANCTUM_ELFLD,
++    SANCTUM_CLINT,
++    SANCTUM_DRAM
++};
++
++enum {
++    SANCTUM_CLOCK_FREQ = 1000000000
++};
++
++#define SANCTUM_CPU TYPE_RISCV_CPU_RV64GCSU_V1_10_0
++
++#endif
+diff --git a/target/riscv/cpu.h b/target/riscv/cpu.h
+index 743f02c8b9..62bc90b41b 100644
+--- a/target/riscv/cpu.h
++++ b/target/riscv/cpu.h
+@@ -163,6 +163,42 @@ struct CPURISCVState {
+     target_ulong sscratch;
+     target_ulong mscratch;
+ 
++    // <SANCTUM>
++      // ## The core state referenced by various CSRs (registers) introduced by Sanctum is declared here.
++      // ### Enclave virtual base and mask
++      // (per-core) registers
++      // ( defines a virtual region for which enclave page tables are used in
++      //   place of OS-controlled page tables)
++      // (machine-mode non-standard read/write)
++      target_ulong mevbase;
++      target_ulong mevmask;
++
++      // ### Enclave page table base
++      // (per core) register
++      // ( pointer to a separate page table data structure used to translate enclave
++      //   virtual addresses)
++      // (machine-mode non-standard read/write)
++      target_ulong meatp;
++
++      // ### DRAM bitmap
++      // (per core) registers (OS and Enclave)
++      // ( white-lists the DRAM regions the core is allowed to access via OS and
++      //   enclave virtual addresses)
++      // (machine-mode non-standard read/write)
++      target_ulong mmrbm;
++      target_ulong memrbm;
++
++      // ### Protected region base and mask
++      // (per core) registers (OS and Enclave)
++      // ( these are used to prevent address translation into a specific range of
++      //   physical addresses, for example to protect the security monitor from all software)
++      // (machine-mode non-standard read/write)
++      target_ulong mparbase;
++      target_ulong mparmask;
++      target_ulong meparbase;
++      target_ulong meparmask;
++    // </SANCTUM>
++
+     /* temporary htif regs */
+     uint64_t mfromhost;
+     uint64_t mtohost;
+diff --git a/target/riscv/cpu_bits.h b/target/riscv/cpu_bits.h
+index 5439f4719e..58df6bac4c 100644
+--- a/target/riscv/cpu_bits.h
++++ b/target/riscv/cpu_bits.h
+@@ -111,6 +111,15 @@
+ #define CSR_HPMCOUNTER30H   0xc9e
+ #define CSR_HPMCOUNTER31H   0xc9f
+ 
++// <SANCTUM>
++  /*
++  // ### TRNG (random number generator)
++  // (user-mode non-standard read-only)
++  // (per core) register
++  */
++  #define CSR_TRNG 0xcc0
++// </SANCTUM>
++
+ /* Machine Timers and Counters */
+ #define CSR_MCYCLE          0xb00
+ #define CSR_MINSTRET        0xb02
+@@ -193,6 +202,43 @@
+ #define CSR_DPC             0x7b1
+ #define CSR_DSCRATCH        0x7b2
+ 
++// <SANCTUM>
++  // ## The addresses of various CSRs (registers) introduced by Sanctum are given here.
++
++  // ### Enclave virtual base and mask
++  // (per-core) registers
++  // ( defines a virtual region for which enclave page tables are used in
++  //   place of OS-controlled page tables)
++  // (machine-mode non-standard read/write)
++  #define CSR_MEVBASE 0x7c0
++  #define CSR_MEVMASK 0x7c1
++
++  // ### Enclave page table base
++  // (per core) register
++  // ( pointer to a separate page table data structure used to translate enclave
++  //   virtual addresses)
++  // (machine-mode non-standard read/write)
++  #define CSR_MEATP 0x7c2
++
++  // ### DRAM bitmap
++  // (per core) registers (OS and Enclave)
++  // ( white-lists the DRAM regions the core is allowed to access via OS and
++  //   enclave virtual addresses)
++  // (machine-mode non-standard read/write)
++  #define CSR_MMRBM 0x7c3
++  #define CSR_MEMRBM 0x7c4
++
++  // ### Protected region base and mask
++  // (per core) registers (OS and Enclave)
++  // ( these are used to prevent address translation into a specific range of
++  //   physical addresses, for example to protect the security monitor from all software)
++  // (machine-mode non-standard read/write)
++  #define CSR_MPARBASE 0x7c5
++  #define CSR_MPARMASK 0x7c6
++  #define CSR_MEPARBASE 0x7c7
++  #define CSR_MEPARMASK 0x7c8
++// </SANCTUM>
++
+ /* Performance Counters */
+ #define CSR_MHPMCOUNTER3    0xb03
+ #define CSR_MHPMCOUNTER4    0xb04
+diff --git a/target/riscv/cpu_helper.c b/target/riscv/cpu_helper.c
+index f257050f12..012952aaf3 100644
+--- a/target/riscv/cpu_helper.c
++++ b/target/riscv/cpu_helper.c
+@@ -141,8 +141,23 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
+     int levels, ptidxbits, ptesize, vm, sum;
+     int mxr = get_field(env->mstatus, MSTATUS_MXR);
+ 
++    // <SANCTUM>
++      target_ulong mrbm = 0xFFFFFFFFFFFFFFFF;
++      target_ulong parbase = 0xFFFFFFFFFFFFFFFF;
++      target_ulong parmask = 0x0000000000000000;
++    // </SANCTUM>
++
+     if (env->priv_ver >= PRIV_VERSION_1_10_0) {
+-        base = get_field(env->satp, SATP_PPN) << PGSHIFT;
++        // <SANCTUM>
++          //base = get_field(env->satp, SATP_PPN) << PGSHIFT;
++          bool is_enclave_walk = ((addr & env->mevmask) == env->mevbase);
++          base = is_enclave_walk ? ( get_field(env->meatp, SATP_PPN) << PGSHIFT )
++                                 : ( get_field(env->satp, SATP_PPN) << PGSHIFT );
++          mrbm = is_enclave_walk ? env->memrbm : env->mmrbm;
++          parbase = is_enclave_walk ? env->meparbase : env->mparbase;
++          parmask = is_enclave_walk ? env->meparmask : env->mparmask;
++        // </SANCTUM>
++
+         sum = get_field(env->mstatus, MSTATUS_SUM);
+         vm = get_field(env->satp, SATP_MODE);
+         switch (vm) {
+@@ -208,6 +223,17 @@ restart:
+ #endif
+         target_ulong ppn = pte >> PTE_PPN_SHIFT;
+ 
++        // <SANCTUM>
++          // Check protected address region
++          if ( ((ppn << PGSHIFT) & parmask) == parbase ) {
++            return TRANSLATE_FAIL;
++          }
++          // Check region permission
++          if ( ( (1<<(((ppn << PGSHIFT) >> 15)&0x3F)) & mrbm ) == 0) {
++            return TRANSLATE_FAIL;
++          }
++        // </SANCTUM>
++
+         if (!(pte & PTE_V)) {
+             /* Invalid PTE */
+             return TRANSLATE_FAIL;
+diff --git a/target/riscv/csr.c b/target/riscv/csr.c
+index 5e7e7d16b8..247b059f29 100644
+--- a/target/riscv/csr.c
++++ b/target/riscv/csr.c
+@@ -20,6 +20,7 @@
+ #include "qemu/osdep.h"
+ #include "qemu/log.h"
+ #include "cpu.h"
++#include "trng.h"
+ #include "qemu/main-loop.h"
+ #include "exec/exec-all.h"
+ 
+@@ -708,6 +709,126 @@ static int write_pmpaddr(CPURISCVState *env, int csrno, target_ulong val)
+ 
+ #endif
+ 
++// <SANCTUM>
++  /* Sanctum Core Configuration */
++
++  static int read_mevbase(CPURISCVState *env, int csrno, target_ulong *val)
++  {
++      *val = env->mevbase;
++      return 0;
++  }
++
++  static int write_mevbase(CPURISCVState *env, int csrno, target_ulong val)
++  {
++      env->mevbase = val;
++      return 0;
++  }
++
++  static int read_mevmask(CPURISCVState *env, int csrno, target_ulong *val)
++  {
++      *val = env->mevmask;
++      return 0;
++  }
++
++  static int write_mevmask(CPURISCVState *env, int csrno, target_ulong val)
++  {
++      env->mevmask = val;
++      return 0;
++  }
++
++  static int read_meatp(CPURISCVState *env, int csrno, target_ulong *val)
++  {
++      *val = env->meatp;
++      return 0;
++  }
++
++  static int write_meatp(CPURISCVState *env, int csrno, target_ulong val)
++  {
++      tlb_flush(CPU(riscv_env_get_cpu(env)));
++      env->meatp = val;
++      return 0;
++  }
++
++  static int read_mmrbm(CPURISCVState *env, int csrno, target_ulong *val)
++  {
++      *val = env->mmrbm;
++      return 0;
++  }
++
++  static int write_mmrbm(CPURISCVState *env, int csrno, target_ulong val)
++  {
++      env->mmrbm = val;
++      return 0;
++  }
++
++  static int read_memrbm(CPURISCVState *env, int csrno, target_ulong *val)
++  {
++      *val = env->memrbm;
++      return 0;
++  }
++
++  static int write_memrbm(CPURISCVState *env, int csrno, target_ulong val)
++  {
++      env->memrbm = val;
++      return 0;
++  }
++
++  static int read_mparbase(CPURISCVState *env, int csrno, target_ulong *val)
++  {
++      *val = env->mparbase;
++      return 0;
++  }
++
++  static int write_mparbase(CPURISCVState *env, int csrno, target_ulong val)
++  {
++      env->mparbase = val;
++      return 0;
++  }
++
++  static int read_mparmask(CPURISCVState *env, int csrno, target_ulong *val)
++  {
++      *val = env->mparmask;
++      return 0;
++  }
++
++  static int write_mparmask(CPURISCVState *env, int csrno, target_ulong val)
++  {
++      env->mparmask = val;
++      return 0;
++  }
++
++  static int read_meparbase(CPURISCVState *env, int csrno, target_ulong *val)
++  {
++      *val = env->meparbase;
++      return 0;
++  }
++
++  static int write_meparbase(CPURISCVState *env, int csrno, target_ulong val)
++  {
++      env->meparbase = val;
++      return 0;
++  }
++
++  static int read_meparmask(CPURISCVState *env, int csrno, target_ulong *val)
++  {
++      *val = env->meparmask;
++      return 0;
++  }
++
++  static int write_meparmask(CPURISCVState *env, int csrno, target_ulong val)
++  {
++      env->meparmask = val;
++      return 0;
++  }
++
++  /* TRNG */
++  static int read_trng(CPURISCVState *env, int csrno, target_ulong *val)
++  {
++     *val = trng();
++     return 0;
++  }
++// <SANCTUM>
++
+ /*
+  * riscv_csrrw - read and/or update control and status register
+  *
+@@ -851,6 +972,17 @@ static riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
+     [CSR_PMPCFG0  ... CSR_PMPADDR9] =  { pmp,   read_pmpcfg,  write_pmpcfg   },
+     [CSR_PMPADDR0 ... CSR_PMPADDR15] = { pmp,   read_pmpaddr, write_pmpaddr  },
+ 
++    /* Sanctum Core Configuration */
++    [CSR_MEVBASE] =             { any,  read_mevbase,     write_mevbase      },
++    [CSR_MEVMASK] =             { any,  read_mevmask,     write_mevmask      },
++    [CSR_MEATP] =               { any,  read_meatp,       write_meatp        },
++    [CSR_MMRBM] =               { any,  read_mmrbm,       write_mmrbm        },
++    [CSR_MEMRBM] =              { any,  read_memrbm,      write_memrbm       },
++    [CSR_MPARBASE] =            { any,  read_mparbase,    write_mparbase     },
++    [CSR_MPARMASK] =            { any,  read_mparmask,    write_mparmask     },
++    [CSR_MEPARBASE] =           { any,  read_meparbase,   write_meparbase    },
++    [CSR_MEPARMASK] =           { any,  read_meparmask,   write_meparmask    },
++
+     /* Performance Counters */
+     [CSR_HPMCOUNTER3   ... CSR_HPMCOUNTER31] =    { ctr,  read_zero          },
+     [CSR_MHPMCOUNTER3  ... CSR_MHPMCOUNTER31] =   { any,  read_zero          },
+@@ -859,5 +991,8 @@ static riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
+     [CSR_HPMCOUNTER3H  ... CSR_HPMCOUNTER31H] =   { ctr,  read_zero          },
+     [CSR_MHPMCOUNTER3H ... CSR_MHPMCOUNTER31H] =  { any,  read_zero          },
+ #endif
++    /* TRNG */
++    [CSR_TRNG] =                { any,   read_trng,                          },
++
+ #endif /* !CONFIG_USER_ONLY */
+ };
+diff --git a/target/riscv/trng.h b/target/riscv/trng.h
+new file mode 100644
+index 0000000000..86d1ac3341
+--- /dev/null
++++ b/target/riscv/trng.h
+@@ -0,0 +1,10 @@
++#ifndef _RISCV_TRNG_H
++#define _RISCV_TRNG_H
++
++#include <stdlib.h>
++uint64_t trng()
++{
++  return random() & 0xFF;
++}
++
++#endif // _RISCV_TRNG_H
+-- 
+2.17.2 (Apple Git-113)
+

@@ -1,0 +1,6 @@
+[submodule "tools/qemu"]
+	path = tools/qemu
+	url = git@github.com:qemu/qemu.git
+[submodule "tools/riscv-gnu-toolchain"]
+	path = tools/riscv-gnu-toolchain
+	url = git@github.com:riscv/riscv-gnu-toolchain.git

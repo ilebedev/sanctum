@@ -1,0 +1,21 @@
+From 041366345538b4d2268172b8849fa829c07a3e67 Mon Sep 17 00:00:00 2001
+From: Ilia Lebedev <ilebedev@mit.edu>
+Date: Tue, 22 Jan 2019 10:50:20 -0500
+Subject: [PATCH] added GDB ncurses GUI option
+
+---
+ Makefile.in | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/Makefile.in b/Makefile.in
+index f4d771c..5cb66ef 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -1,3 +1,5 @@
++GDB_TARGET_FLAGS_EXTRA := --enable-gui
++
+ srcdir := @abs_top_srcdir@
+ builddir := @abs_top_builddir@
+ INSTALL_DIR := @prefix@
+--
+2.18.0
