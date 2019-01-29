@@ -15,7 +15,7 @@ test:
 
 .PHONY: qemu
 qemu:
-	cd $(SANCTUM_DIR)/tools/qemu && git submodule update --init --recursive
+	cd $(SANCTUM_DIR) && git submodule update --init --recursive tools/qemu
 	cd $(SANCTUM_DIR)/tools/qemu && git apply $(SCRIPTS_DIR)/qemu.patch
 	mkdir -p $(BUILD_DIR)/qemu
 	cd $(BUILD_DIR)/qemu && $(SANCTUM_DIR)/tools/qemu/configure --target-list=riscv64-softmmu
