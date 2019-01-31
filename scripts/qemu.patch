@@ -1,27 +1,3 @@
-From 0ae6011e88a9a649ac02d78d5aec8eb79a904b31 Mon Sep 17 00:00:00 2001
-From: Ilia Lebedev <ilebedev@mit.edu>
-Date: Thu, 17 Jan 2019 11:45:24 -0500
-Subject: [PATCH] Sanctum model for QEMU
-
----
- disas/riscv.c              |  14 ++
- hw/riscv/Makefile.objs     |   2 +
- hw/riscv/puf.c             | 129 ++++++++++++++++
- hw/riscv/sanctum.c         | 291 +++++++++++++++++++++++++++++++++++++
- include/hw/riscv/puf.h     |  32 ++++
- include/hw/riscv/sanctum.h |  46 ++++++
- target/riscv/cpu.h         |  36 +++++
- target/riscv/cpu_bits.h    |  46 ++++++
- target/riscv/cpu_helper.c  |  28 +++-
- target/riscv/csr.c         | 135 +++++++++++++++++
- target/riscv/trng.h        |  10 ++
- 11 files changed, 768 insertions(+), 1 deletion(-)
- create mode 100644 hw/riscv/puf.c
- create mode 100644 hw/riscv/sanctum.c
- create mode 100644 include/hw/riscv/puf.h
- create mode 100644 include/hw/riscv/sanctum.h
- create mode 100644 target/riscv/trng.h
-
 diff --git a/disas/riscv.c b/disas/riscv.c
 index 7fd1019623..9003918e79 100644
 --- a/disas/riscv.c
@@ -209,10 +185,10 @@ index 0000000000..1a072cfad9
 +}
 diff --git a/hw/riscv/sanctum.c b/hw/riscv/sanctum.c
 new file mode 100644
-index 0000000000..14d8ef69de
+index 0000000000..d5f3176a1a
 --- /dev/null
 +++ b/hw/riscv/sanctum.c
-@@ -0,0 +1,291 @@
+@@ -0,0 +1,293 @@
 +/*
 + * QEMU RISC-V Sanctum Emulator
 + *
@@ -427,7 +403,9 @@ index 0000000000..14d8ef69de
 +    uint32_t reset_vec_size = 0;
 +
 +    uint32_t default_reset_vec[1] = {
-+        0x0000006F,                  /* 1:  j  x0, -2 # Loop forever; next time, specify a bootloader binary */
++        0x0010029B,                  // 0: addiw   t0,zero,1  # Compute the  destination address 0x0x80000000 in t0
++	0x01f29293,                  // 4: slli    t0,t0,0x1f
++	0x00008282,                  // 8: jr      t0         # Jump to the address
 +    };
 +
 +    /* the reset vector is in little_endian byte order */
@@ -934,6 +912,3 @@ index 0000000000..86d1ac3341
 +}
 +
 +#endif // _RISCV_TRNG_H
--- 
-2.17.2 (Apple Git-113)
-
