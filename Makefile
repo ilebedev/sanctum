@@ -15,6 +15,8 @@ CC := riscv64-unknown-elf-gcc
 
 .PHONY: all clean test qemu tools linux
 
+all: $(QEMU) test
+
 # High-level targets
 clean:
 	rm -rf build
