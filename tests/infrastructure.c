@@ -25,10 +25,10 @@ void print_str(char* s) {
 
 void pass_test() {
   print_str("[TEST] PASSED\n");
-  tohost = TOHOST_CMD(0, 0, 0); // report test done; 0 exit code
+  tohost = TOHOST_CMD(0, 0, 0b01); // report test done; 0 exit code
 }
 
 void fail_test() {
   print_str("[TEST] FAILED\n");
-  tohost = TOHOST_CMD(0, 0, 1); // report test done; 1 exit code
+  tohost = TOHOST_CMD(0, 0, 0b11); // report test done; 1 exit code
 }
