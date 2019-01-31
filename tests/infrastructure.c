@@ -24,7 +24,7 @@ void print_str(char* s) {
 }
 
 void pass_test() {
-  print_str("[TEST] PASSED\n");
+  print_str("[TEST] OK\n");
   tohost = TOHOST_CMD(0, 0, 0b01); // report test done; 0 exit code
 }
 

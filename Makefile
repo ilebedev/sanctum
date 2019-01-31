@@ -23,12 +23,13 @@ clean:
 
 test: $(QEMU) $(TEST_TASKS)
 	@echo "All the test cases in $(SANCTUM_DIR)/test have been run."
+	@echo "The tests were: $(TEST_NAMES)"
 
 .PHONY: %.test.task
 %.test.task: $(QEMU)
 	mkdir -p $(BUILD_DIR)/tests
 	cd $(SANCTUM_DIR)/tests && $(CC) -T infrastructure.lds -march=rv64g -mabi=lp64 -nostdlib -nostartfiles -fno-common -std=gnu11 -static -fPIC -g -O0 -Wall infrastructure.c $*.S -o $(BUILD_DIR)/tests/$*.elf
-	cd $(BUILD_DIR)/tests && $(QEMU) -machine sanctum -nographic -kernel $*.elf
+	- cd $(BUILD_DIR)/tests && $(QEMU) -machine sanctum -nographic -kernel $*.elf
 
 .PHONY: qemu
 qemu: $(QEMU)
