@@ -1,6 +1,5 @@
-#include "test_infrastructure.S"
 
-.section .infra.entry
+.section .text.entry
 
 .global entry
 entry:
@@ -15,20 +14,18 @@ call dut_entry
 beq a0, zero, .test_failed
 j .test_passed
 
-/* Routine for printing characters to the console over HTIF
+/* Routine for printing characters to the console over HTIF */
 .putchar:
-...TODO
+  jr ra
 
 /* If the test reports as failed, print "FAIL" in the console */
 .test_failed:
 /* Print "FAIL" */
-TODO
 j .halt
 
 /* If the test reports as passed, print "PASS" in the console */
 .test_passed:
 /* Print "PASS" */
-TODO
 j .halt
 
 /* Halt */
