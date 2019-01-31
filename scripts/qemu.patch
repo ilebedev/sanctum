@@ -402,10 +402,11 @@ index 0000000000..d5f3176a1a
 +    char *reset_vec;
 +    uint32_t reset_vec_size = 0;
 +
-+    uint32_t default_reset_vec[1] = {
-+        0x0010029B,                  // 0: addiw   t0,zero,1  # Compute the  destination address 0x0x80000000 in t0
-+	0x01f29293,                  // 4: slli    t0,t0,0x1f
-+	0x00008282,                  // 8: jr      t0         # Jump to the address
++    uint32_t default_reset_vec[4] = {
++        0x000402b7,                  // 0: lui	t0,0x40
++        0x0012829b,                  // 4: addiw	t0,t0,1
++        0x00d29293,                  // 8: slli	t0,t0,0xd
++        0x00028067,                  // C: jr	t0 # Jump to 0x80002000
 +    };
 +
 +    /* the reset vector is in little_endian byte order */
@@ -579,7 +580,7 @@ index 743f02c8b9..62bc90b41b 100644
 @@ -163,6 +163,42 @@ struct CPURISCVState {
      target_ulong sscratch;
      target_ulong mscratch;
- 
+
 +    // <SANCTUM>
 +      // ## The core state referenced by various CSRs (registers) introduced by Sanctum is declared here.
 +      // ### Enclave virtual base and mask
@@ -626,7 +627,7 @@ index 5439f4719e..58df6bac4c 100644
 @@ -111,6 +111,15 @@
  #define CSR_HPMCOUNTER30H   0xc9e
  #define CSR_HPMCOUNTER31H   0xc9f
- 
+
 +// <SANCTUM>
 +  /*
 +  // ### TRNG (random number generator)
@@ -642,7 +643,7 @@ index 5439f4719e..58df6bac4c 100644
 @@ -193,6 +202,43 @@
  #define CSR_DPC             0x7b1
  #define CSR_DSCRATCH        0x7b2
- 
+
 +// <SANCTUM>
 +  // ## The addresses of various CSRs (registers) introduced by Sanctum are given here.
 +
@@ -690,7 +691,7 @@ index f257050f12..012952aaf3 100644
 @@ -141,8 +141,23 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
      int levels, ptidxbits, ptesize, vm, sum;
      int mxr = get_field(env->mstatus, MSTATUS_MXR);
- 
+
 +    // <SANCTUM>
 +      target_ulong mrbm = 0xFFFFFFFFFFFFFFFF;
 +      target_ulong parbase = 0xFFFFFFFFFFFFFFFF;
@@ -715,7 +716,7 @@ index f257050f12..012952aaf3 100644
 @@ -208,6 +223,17 @@ restart:
  #endif
          target_ulong ppn = pte >> PTE_PPN_SHIFT;
- 
+
 +        // <SANCTUM>
 +          // Check protected address region
 +          if ( ((ppn << PGSHIFT) & parmask) == parbase ) {
@@ -741,11 +742,11 @@ index 5e7e7d16b8..247b059f29 100644
 +#include "trng.h"
  #include "qemu/main-loop.h"
  #include "exec/exec-all.h"
- 
+
 @@ -708,6 +709,126 @@ static int write_pmpaddr(CPURISCVState *env, int csrno, target_ulong val)
- 
+
  #endif
- 
+
 +// <SANCTUM>
 +  /* Sanctum Core Configuration */
 +
@@ -872,7 +873,7 @@ index 5e7e7d16b8..247b059f29 100644
 @@ -851,6 +972,17 @@ static riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
      [CSR_PMPCFG0  ... CSR_PMPADDR9] =  { pmp,   read_pmpcfg,  write_pmpcfg   },
      [CSR_PMPADDR0 ... CSR_PMPADDR15] = { pmp,   read_pmpaddr, write_pmpaddr  },
- 
+
 +    /* Sanctum Core Configuration */
 +    [CSR_MEVBASE] =             { any,  read_mevbase,     write_mevbase      },
 +    [CSR_MEVMASK] =             { any,  read_mevmask,     write_mevmask      },

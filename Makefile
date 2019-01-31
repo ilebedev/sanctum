@@ -25,7 +25,8 @@ test: $(QEMU) $(TEST_TASKS)
 .PHONY: %.test.task
 %.test.task: $(QEMU)
 	mkdir -p $(BUILD_DIR)/tests
-	cd $(SANCTUM_DIR)/tests && $(CC) -T infrastructure.lds -march=rv64g -mabi=lp64 -nostdlib -nostartfiles -fno-common -std=gnu11 -static -fPIC -Wall infrastructure.c $*.S -o $(BUILD_DIR)/tests/$*.elf
+	cd $(SANCTUM_DIR)/tests && $(CC) -T infrastructure.lds -march=rv64g -mabi=lp64 -nostdlib -nostartfiles -fno-common -std=gnu11 -static -fPIC -g -O0 -Wall infrastructure.c $*.S -o $(BUILD_DIR)/tests/$*.elf
+	cd $(BUILD_DIR)/tests && $(QEMU) -nographic -machine sanctum -kernel $*.elf
 
 .PHONY: qemu
 qemu: $(QEMU)

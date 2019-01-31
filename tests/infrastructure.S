@@ -1,4 +1,4 @@
-
+.option norvc
 .section .text.entry
 
 .global entry
@@ -9,7 +9,7 @@ li a0, 0
 
 /* Call into design under test */
 call dut_entry
-
+la sp, stack_ptr
 /* Read test result */
 beq a0, zero, .test_failed
 j .test_passed
@@ -21,13 +21,19 @@ j .test_passed
 /* If the test reports as failed, print "FAIL" in the console */
 .test_failed:
 /* Print "FAIL" */
+call fail_test
 j .halt
 
 /* If the test reports as passed, print "PASS" in the console */
 .test_passed:
 /* Print "PASS" */
+call pass_test
 j .halt
 
 /* Halt */
 .halt:
   j .halt /* spin forever, for now */
+
+stack_base:
+  .skip 128
+stack_ptr:
