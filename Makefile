@@ -28,12 +28,12 @@ test: $(QEMU) $(TEST_TASKS)
 %.test.task: $(QEMU)
 	mkdir -p $(BUILD_DIR)/tests
 	cd $(SANCTUM_DIR)/tests && $(CC) -T infrastructure.lds -march=rv64g -mabi=lp64 -nostdlib -nostartfiles -fno-common -std=gnu11 -static -fPIC -g -O0 -Wall infrastructure.c $*.S -o $(BUILD_DIR)/tests/$*.elf
-	cd $(BUILD_DIR)/tests && $(QEMU) -nographic -machine sanctum -kernel $*.elf
+	cd $(BUILD_DIR)/tests && $(QEMU) -machine sanctum -nographic -kernel $*.elf
 
 .PHONY: qemu
 qemu: $(QEMU)
 
-$(BUILD_DIR)/qemu/riscv64-softmmu/qemu-system-riscv64:
+$(QEMU):
 	cd $(SANCTUM_DIR) && git submodule update --init --recursive tools/qemu
 	cd $(SANCTUM_DIR)/tools/qemu && git apply $(SCRIPTS_DIR)/qemu.patch
 	mkdir -p $(BUILD_DIR)/qemu
