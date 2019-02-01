@@ -24,16 +24,11 @@ dut_entry:
 
   /* Activate Address Translation */
   /** Set satp mode to Sv39 and set the root page table address **/ 
-  csrr t0, satp
   # SATP_MODE: 0xFF00000000000000
-  # SATP_ASID: 0x00FFFF0000000000
-  li t1, 0x8000000000000000 # Mode Sv39 is value 8
+  li t0, 0x8000000000000000 # Mode Sv39 is value 8
   la t2, .root_page_table
-  srl t2, t2, 0xA # Physical Address divided by 4KiB
-  or t1, t1, t2 
-  li t2, 0x0FFFF00000000000 # Retain ASID value
-  and t0, t0, t2
-  or t0, t0, t1
+  srl t2, t2, 0xC # Physical Address divided by 4KiB
+  or t0, t0, t2 
   csrw satp, t0
 
   /* Switch to S-mode, jump to the protected range */
