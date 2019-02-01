@@ -12,10 +12,6 @@ dut_entry:
     0 if the test FAILS
     1 if the test PASSES */
 
-  /* Set up the stack so ra can be saved */ 
-  la sp, stack_ptr
-  sd ra, -8(sp)
-
   /* Set up a trap vector */
   la t0, .default_trap_vector
   csrw mtvec, t0
@@ -38,7 +34,8 @@ dut_entry:
   csrw mstatus, t0
 
   /* Set return address to malicious program mret to S-mode */
-  la ra, .malicious_program
+  la t0, .malicious_program
+  csrw mepc, t0
   mret
   
 .malicious_program: /* Tries to read in the protected range */
@@ -56,5 +53,4 @@ dut_entry:
   la a0, 1 // The trap was triggered and the test is successful
 
 .return_caller:
-  ld ra, -8(sp)
   jr ra 
