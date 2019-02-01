@@ -14,7 +14,7 @@ dut_entry:
 
   /* Set up the stack so ra can be saved */ 
   la sp, stack_ptr
-  sd ra, 1(sp)
+  sd ra, -8(sp)
 
   /* Set up a trap vector */
   la t0, .default_trap_vector
@@ -42,21 +42,19 @@ dut_entry:
   mret
   
 .malicious_program: /* Tries to read in the protected range */
-   li t0, 0x80001000
-#  lw t0, 0(t0)
+  li t0, 0x80001000
+  lw t0, 0(t0)
  
   /* The following should never execute */
   li a0, 0 // Fail this test!
   j .return_caller /* return to caller */
-
-.return_caller:
-  ld ra, 1(sp)
-  jr ra 
 
 .default_trap_vector:
   csrr t0, mepc
   csrr t1, mcause
   csrr t2, mtval
   la a0, 1 // The trap was triggered and the test is successful
-  j .return_caller /* return to caller */
 
+.return_caller:
+  ld ra, -8(sp)
+  jr ra 
