@@ -25,9 +25,10 @@ dut_entry:
   /* Switch to S-mode, jump to the protected range */
   /** Set mPP to 1 (S-mode) and sIE to 1 **/
   csrr t0, mstatus
-  # MSTATUS_MPP: 0x00001800
-  # MSTATUS_SIE: 0x00000002
-  li t1, 0xFFFFFFFFFFFFE7FD
+  # MSTATUS_MPP:  0x00001800
+  # MSTATUS_mPIE: 0x00000080
+  # MSTATUS_SIE:  0x00000002
+  li t1, 0xFFFFFFFFFFFFE77D
   li t2, 0x0802
   and t0, t0, t1
   or t0, t0, t2
