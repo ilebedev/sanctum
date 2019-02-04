@@ -16,14 +16,13 @@ dut_entry:
   la t0, .default_trap_vector
   csrw mtvec, t0
 
-
   /* Set up protected address range (boot_keys region)*/
   li t0, -1
   csrw 0x07c0, t0 # Set mevbase
   li t0, 0
   csrw 0x07c1, t0 # Set mevmask
 
-  li t0, 0xC0000000
+  ld t0, .illegal_address
   csrw 0x07C5, t0 # Set mparbase
   li t0, 0xF0000000
   csrw 0x07C6, t0 # Set mparmask
@@ -60,19 +59,34 @@ dut_entry:
   mret
  
 .malicious_program: /* Tries to read in the protected range */
-  li t0, 0xC0000004
+  ld t0, .illegal_address
+.illegal_load:
   lw t0, 0(t0)
- 
-  /* The following should never execute */
-  li a0, 0 // Fail this test!
-  jr ra /* return to caller */
+
+  j .test_failure
 
 .default_trap_vector:
-  csrr t0, mepc
-  csrr t1, mcause
-  csrr t2, mtval
-  li a0, 1 // The trap was triggered and the test is successful
+  csrr t0, mcause // Check this is a Load Page Fault
+  li t1, 0xD
+  bne t0, t1, .test_failure
+
+  csrr t0, mepc   // That happend during the illegal load
+  la t1, .illegal_load
+  bne t0, t1, .test_failure
+
+  csrr t0, mtval  // On the illegal address
+  ld t1, .illegal_address
+  bne t0, t1, .test_failure
+
+  li a0, 1 // The test is successful
   jr ra
+
+.test_failure:
+  li a0, 0 // Fail this test!
+  jr ra /* return to  caller */
+
+.illegal_address:
+  .dword 0x00000000C0000000
 
 .align 12
 .root_page_table:
