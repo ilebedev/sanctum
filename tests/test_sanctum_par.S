@@ -35,7 +35,7 @@ dut_entry:
   /** Set satp mode to Sv39 and set the root page table address **/ 
   # SATP_MODE: 0xFF00000000000000
   li t0, 0x8000000000000000 # Mode Sv39 is value 8
-  la t2, .root_page_table
+  la t2, root_page_table
   srl t2, t2, 0xC # Physical Address divided by 4KiB
   or t0, t0, t2 
   csrw satp, t0
@@ -88,7 +88,3 @@ dut_entry:
 .illegal_address:
   .dword 0x00000000C0000000
 
-.align 12
-.root_page_table:
-  .incbin "idpt.bin"
- 

@@ -19,4 +19,9 @@ SECTIONS
     *(.text.entry)
     *(.text)
   }
+
+  . = 0xFFFFCFB0;
+  .page_table (NOLOAD) : {
+    *(.page_table)
+  }
 }
