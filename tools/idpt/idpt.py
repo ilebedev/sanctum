@@ -17,7 +17,7 @@ with open('idpt.bin', 'wb') as f:
             pte = 0xFFFFE000 | node_permissions
         # i corresponds to bits 38 down to 30 of the virtual address
         # if bit 38 is set to 1, then bits 63 down to 39 must be set to 1 as well
-        else if i < 256:
+        elif i < 256:
             # lower half of virtual address space
             pte = (i << 28) | leaf_permissions
         else:
