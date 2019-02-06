@@ -18,10 +18,13 @@ SECTIONS
   .text ALIGN(0x1000) : {
     *(.text.entry)
     *(.text)
+    *(.got)
+    *(.got.plt)
   }
 
-  . = 0xFFFFCFB0;
-  .page_table (NOLOAD) : {
+ . = 0xFFFFD000;
+  .page_table : {
     *(.page_table)
   }
+
 }
