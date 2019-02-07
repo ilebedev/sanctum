@@ -4,13 +4,13 @@ index a9ac16d94e..b730dcfc0d 100644
 +++ b/Makefile
 @@ -1,5 +1,8 @@
  # Makefile for QEMU.
- 
+
 +QEMU_CFLAGS += -g -O0
 +CFLAGS += -g -O0
 +
  # Always point to the root of the build tree (needs GNU make).
  BUILD_DIR=$(CURDIR)
- 
+
 diff --git a/disas/riscv.c b/disas/riscv.c
 index 7fd1019623..9003918e79 100644
 --- a/disas/riscv.c
@@ -612,7 +612,7 @@ index 743f02c8b9..62bc90b41b 100644
 @@ -163,6 +163,42 @@ struct CPURISCVState {
      target_ulong sscratch;
      target_ulong mscratch;
- 
+
 +    // <SANCTUM>
 +      // ## The core state referenced by various CSRs (registers) introduced by Sanctum is declared here.
 +      // ### Enclave virtual base and mask
@@ -659,7 +659,7 @@ index 5439f4719e..58df6bac4c 100644
 @@ -111,6 +111,15 @@
  #define CSR_HPMCOUNTER30H   0xc9e
  #define CSR_HPMCOUNTER31H   0xc9f
- 
+
 +// <SANCTUM>
 +  /*
 +  // ### TRNG (random number generator)
@@ -675,7 +675,7 @@ index 5439f4719e..58df6bac4c 100644
 @@ -193,6 +202,43 @@
  #define CSR_DPC             0x7b1
  #define CSR_DSCRATCH        0x7b2
- 
+
 +// <SANCTUM>
 +  // ## The addresses of various CSRs (registers) introduced by Sanctum are given here.
 +
@@ -723,7 +723,7 @@ index f257050f12..dcc001d040 100644
 @@ -141,8 +141,24 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
      int levels, ptidxbits, ptesize, vm, sum;
      int mxr = get_field(env->mstatus, MSTATUS_MXR);
- 
+
 +
 +    // <SANCTUM>
 +    target_ulong mrbm    = 0xFFFFFFFFFFFFFFFF;
@@ -749,14 +749,14 @@ index f257050f12..dcc001d040 100644
 @@ -208,6 +224,17 @@ restart:
  #endif
          target_ulong ppn = pte >> PTE_PPN_SHIFT;
- 
+
 +        // <SANCTUM>
 +          // Check protected address region
 +          if ( ((ppn << PGSHIFT) & parmask) == parbase ) {
 +            return TRANSLATE_FAIL;
 +          }
-+          // Check region permission
-+          if ( ( (1<<(((ppn << PGSHIFT) >> 15)&0x3F)) & mrbm ) == 0) {
++          // Check region permission, using address bits [30:25]
++          if ( ( (1<<(((ppn << PGSHIFT) >> 25)&0x3F)) & mrbm ) == 0) {
 +            return TRANSLATE_FAIL;
 +          }
 +        // </SANCTUM>
@@ -775,11 +775,11 @@ index 5e7e7d16b8..247b059f29 100644
 +#include "trng.h"
  #include "qemu/main-loop.h"
  #include "exec/exec-all.h"
- 
+
 @@ -708,6 +709,126 @@ static int write_pmpaddr(CPURISCVState *env, int csrno, target_ulong val)
- 
+
  #endif
- 
+
 +// <SANCTUM>
 +  /* Sanctum Core Configuration */
 +
@@ -906,7 +906,7 @@ index 5e7e7d16b8..247b059f29 100644
 @@ -851,6 +972,17 @@ static riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
      [CSR_PMPCFG0  ... CSR_PMPADDR9] =  { pmp,   read_pmpcfg,  write_pmpcfg   },
      [CSR_PMPADDR0 ... CSR_PMPADDR15] = { pmp,   read_pmpaddr, write_pmpaddr  },
- 
+
 +    /* Sanctum Core Configuration */
 +    [CSR_MEVBASE] =             { any,  read_mevbase,     write_mevbase      },
 +    [CSR_MEVMASK] =             { any,  read_mevmask,     write_mevmask      },
