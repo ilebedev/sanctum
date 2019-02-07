@@ -17,14 +17,14 @@ SECTIONS
   . = 0x80002000;
   .text ALIGN(0x1000) : {
     *(.text.entry)
-    *(.text)
     *(.got)
     *(.got.plt)
+    *(.rodata)
+    *(.text)
   }
 
-  
-  . = 0x80004000;
-  .page_table ALIGN(0x1000) : {
-    *(.page_table)
+  . = 0xFFFFD000;
+  .text.page_table ALIGN(0x1000) : {
+    *(.text.page_table)
   }
 }
