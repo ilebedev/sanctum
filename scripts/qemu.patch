@@ -196,6 +196,25 @@ index 0000000000..1a072cfad9
 +    sysbus_mmio_map(SYS_BUS_DEVICE(dev), 0, addr);
 +    return dev;
 +}
+diff --git a/hw/riscv/riscv_hart.c b/hw/riscv/riscv_hart.c
+index e34a26a0ef..9edfb852e5 100644
+--- a/hw/riscv/riscv_hart.c
++++ b/hw/riscv/riscv_hart.c
+@@ -48,7 +48,13 @@ static void riscv_harts_realize(DeviceState *dev, Error **errp)
+         object_initialize_child(OBJECT(s), "harts[*]", &s->harts[n],
+                                 sizeof(RISCVCPU), s->cpu_type,
+                                 &error_abort, NULL);
+-        s->harts[n].env.mhartid = n;
++        s->harts[n].env.mhartid  = n;
++        s->harts[n].env.mmrbm    = 0xFFFFFFFFFFFFFFFF;
++        s->harts[n].env.mparbase = 0xFFFFFFFFFFFFFFFF;
++        s->harts[n].env.mparmask = 0;
++        s->harts[n].env.mevbase  = 0xFFFFFFFFFFFFFFFF;
++        s->harts[n].env.mevmask  = 0;
++
+         qemu_register_reset(riscv_harts_cpu_reset, &s->harts[n]);
+         object_property_set_bool(OBJECT(&s->harts[n]), true,
+                                  "realized", &err);
 diff --git a/hw/riscv/sanctum.c b/hw/riscv/sanctum.c
 new file mode 100644
 index 0000000000..188d4619e6
@@ -587,7 +606,7 @@ index 0000000000..671ce3c1fb
 +
 +#endif
 diff --git a/target/riscv/cpu.h b/target/riscv/cpu.h
-index 743f02c8b9..a4b3ddbf2c 100644
+index 743f02c8b9..62bc90b41b 100644
 --- a/target/riscv/cpu.h
 +++ b/target/riscv/cpu.h
 @@ -163,6 +163,42 @@ struct CPURISCVState {
@@ -601,8 +620,8 @@ index 743f02c8b9..a4b3ddbf2c 100644
 +      // ( defines a virtual region for which enclave page tables are used in
 +      //   place of OS-controlled page tables)
 +      // (machine-mode non-standard read/write)
-+      target_ulong mevbase  = 0xFFFFFFFFFFFFFFFF;
-+      target_ulong mevmask  = 0x0000000000000000;
++      target_ulong mevbase;
++      target_ulong mevmask;
 +
 +      // ### Enclave page table base
 +      // (per core) register
@@ -616,7 +635,7 @@ index 743f02c8b9..a4b3ddbf2c 100644
 +      // ( white-lists the DRAM regions the core is allowed to access via OS and
 +      //   enclave virtual addresses)
 +      // (machine-mode non-standard read/write)
-+      target_ulong mmrbm    = 0xFFFFFFFFFFFFFFFF;
++      target_ulong mmrbm;
 +      target_ulong memrbm;
 +
 +      // ### Protected region base and mask
@@ -624,8 +643,8 @@ index 743f02c8b9..a4b3ddbf2c 100644
 +      // ( these are used to prevent address translation into a specific range of
 +      //   physical addresses, for example to protect the security monitor from all software)
 +      // (machine-mode non-standard read/write)
-+      target_ulong mparbase = 0xFFFFFFFFFFFFFFFF;
-+      target_ulong mparmask = 0x0000000000000000;
++      target_ulong mparbase;
++      target_ulong mparmask;
 +      target_ulong meparbase;
 +      target_ulong meparmask;
 +    // </SANCTUM>
@@ -698,12 +717,20 @@ index 5439f4719e..58df6bac4c 100644
  #define CSR_MHPMCOUNTER3    0xb03
  #define CSR_MHPMCOUNTER4    0xb04
 diff --git a/target/riscv/cpu_helper.c b/target/riscv/cpu_helper.c
-index f257050f12..8aa12f7e5e 100644
+index f257050f12..dcc001d040 100644
 --- a/target/riscv/cpu_helper.c
 +++ b/target/riscv/cpu_helper.c
-@@ -142,7 +142,16 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
+@@ -141,8 +141,24 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
+     int levels, ptidxbits, ptesize, vm, sum;
      int mxr = get_field(env->mstatus, MSTATUS_MXR);
  
++
++    // <SANCTUM>
++    target_ulong mrbm    = 0xFFFFFFFFFFFFFFFF;
++    target_ulong parbase = 0xFFFFFFFFFFFFFFFF;
++    target_ulong parmask = 0x0000000000000000;
++    // </SANCTUM>
++
      if (env->priv_ver >= PRIV_VERSION_1_10_0) {
 -        base = get_field(env->satp, SATP_PPN) << PGSHIFT;
 +        // <SANCTUM>
@@ -719,7 +746,7 @@ index f257050f12..8aa12f7e5e 100644
          sum = get_field(env->mstatus, MSTATUS_SUM);
          vm = get_field(env->satp, SATP_MODE);
          switch (vm) {
-@@ -208,6 +217,17 @@ restart:
+@@ -208,6 +224,17 @@ restart:
  #endif
          target_ulong ppn = pte >> PTE_PPN_SHIFT;
  
