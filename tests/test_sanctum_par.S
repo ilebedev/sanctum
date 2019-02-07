@@ -48,10 +48,15 @@ dut_entry:
   csrw mepc, t0
   mret
  
-.malicious_program: /* Tries to read in the protected range */
-  ld t0, .illegal_address
-.illegal_load:
-  lw t0, 0(t0)
+.malicious_program: /* Tries to read at the limit of the protected range and then inside */
+  ld t0, .illegal_address // Read on next Giga page
+  li t1, 0x40000000
+  add t0, t0, t1
+  lw zero, 0(t0)
+  ld t0, .illegal_address // Read the last address before the illegal Giga page
+  lw zero, -4(t0)
+.illegal_load: // Read the first address of the illegal Giga page
+  lw zero, 0(t0)
 
   j .test_failure
 
