@@ -22,9 +22,9 @@ SECTIONS
     *(.got.plt)
   }
 
- . = 0xFFFFD000;
-  .page_table : {
+  
+  . = 0x80004000;
+  .page_table ALIGN(0x1000) : {
     *(.page_table)
   }
-
 }

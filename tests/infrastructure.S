@@ -38,11 +38,10 @@ stack_base:
   .skip 128
 stack_ptr:
 
-
 /* Copy the page table in the dedicated region */ 
 
 .section .page_table
-
+.align(12)
 .global root_page_table
 root_page_table:
   .incbin "idpt.bin"
