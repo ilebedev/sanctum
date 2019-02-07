@@ -16,20 +16,10 @@ dut_entry:
   la t0, .default_trap_vector
   csrw mtvec, t0
 
-  /* Set up protected address range (boot_keys region)*/
-  li t0, -1
-  csrw 0x07c0, t0 # Set mevbase
-  li t0, 0
-  csrw 0x07c1, t0 # Set mevmask
-
   ld t0, .illegal_address
   csrw 0x07C5, t0 # Set mparbase
   li t0, 0xF0000000
   csrw 0x07C6, t0 # Set mparmask
-
-  /* Authorize access by default to all memory regions */
-  li t0, 0xFFFFFFFFFFFFFFFF
-  csrw 0x07C3, t0 # Set mmrbm
 
   /* Activate Address Translation */
   /** Set satp mode to Sv39 and set the root page table address **/ 
