@@ -1,3 +1,16 @@
+diff --git a/Makefile b/Makefile
+index a9ac16d94e..b730dcfc0d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,5 +1,8 @@
+ # Makefile for QEMU.
+ 
++QEMU_CFLAGS += -g -O0
++CFLAGS += -g -O0
++
+ # Always point to the root of the build tree (needs GNU make).
+ BUILD_DIR=$(CURDIR)
+ 
 diff --git a/disas/riscv.c b/disas/riscv.c
 index 7fd1019623..9003918e79 100644
 --- a/disas/riscv.c
@@ -685,17 +698,19 @@ index 5439f4719e..58df6bac4c 100644
  #define CSR_MHPMCOUNTER3    0xb03
  #define CSR_MHPMCOUNTER4    0xb04
 diff --git a/target/riscv/cpu_helper.c b/target/riscv/cpu_helper.c
-index f257050f12..012952aaf3 100644
+index f257050f12..f4724e45b9 100644
 --- a/target/riscv/cpu_helper.c
 +++ b/target/riscv/cpu_helper.c
-@@ -141,8 +141,23 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
+@@ -141,8 +141,25 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
      int levels, ptidxbits, ptesize, vm, sum;
      int mxr = get_field(env->mstatus, MSTATUS_MXR);
  
 +    // <SANCTUM>
-+      target_ulong mrbm = 0xFFFFFFFFFFFFFFFF;
++      target_ulong mrbm    = 0xFFFFFFFFFFFFFFFF;
 +      target_ulong parbase = 0xFFFFFFFFFFFFFFFF;
 +      target_ulong parmask = 0x0000000000000000;
++      target_ulong mevbase = 0xFFFFFFFFFFFFFFFF;
++      target_ulong mevmask = 0x0000000000000000;
 +    // </SANCTUM>
 +
      if (env->priv_ver >= PRIV_VERSION_1_10_0) {
@@ -713,7 +728,7 @@ index f257050f12..012952aaf3 100644
          sum = get_field(env->mstatus, MSTATUS_SUM);
          vm = get_field(env->satp, SATP_MODE);
          switch (vm) {
-@@ -208,6 +223,17 @@ restart:
+@@ -208,6 +225,17 @@ restart:
  #endif
          target_ulong ppn = pte >> PTE_PPN_SHIFT;
  
