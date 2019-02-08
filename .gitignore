@@ -51,5 +51,8 @@ Module.symvers
 Mkfile.old
 dkms.conf
 
+# Build folder
+build
+
 .DS_Store
 gdb.txt

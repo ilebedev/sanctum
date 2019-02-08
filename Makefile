@@ -4,6 +4,8 @@ remove_trailing_slash = $(if $(filter %/,$(1)),$(call remove_trailing_slash,$(pa
 SANCTUM_DIR := $(call remove_trailing_slash, $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 BUILD_DIR := $(SANCTUM_DIR)/build
 SCRIPTS_DIR := $(SANCTUM_DIR)/scripts
+TESTS_DIR := $(SANCTUM_DIR)/tests
+IDPT_DIR := $(SANCTUM_DIR)/tools/idpt
 
 TEST_NAMES :=  $(notdir $(basename $(wildcard $(SANCTUM_DIR)/tests/test_*)))
 TEST_ELFS := $(addprefix $(BUILD_DIR)/tests/, $(addsuffix .test.elf, $(TEST_NAMES)))
@@ -28,8 +30,9 @@ test: $(QEMU) $(TEST_TASKS)
 .PHONY: %.test.task
 %.test.task: $(QEMU)
 	mkdir -p $(BUILD_DIR)/tests
-	cd $(SANCTUM_DIR)/tests && $(CC) -T infrastructure.lds -march=rv64g -mabi=lp64 -nostdlib -nostartfiles -fno-common -std=gnu11 -static -fPIC -g -O0 -Wall infrastructure.c $*.S -o $(BUILD_DIR)/tests/$*.elf
-	- cd $(BUILD_DIR)/tests && $(QEMU) -machine sanctum -m 2G -nographic -kernel $*.elf
+	cd $(TESTS_DIR) && python $(IDPT_DIR)/idpt.py
+	cd $(TESTS_DIR) && $(CC) -T infrastructure.lds -march=rv64g -mabi=lp64 -nostdlib -nostartfiles -fno-common -std=gnu11 -static -fPIC -g -O0 -Wall infrastructure.c $*.S -o $(BUILD_DIR)/tests/$*.elf
+	- cd $(TESTS_DIR) && $(QEMU) -machine sanctum -m 2G -nographic -kernel $*.elf
 
 .PHONY: qemu
 qemu: $(QEMU)
