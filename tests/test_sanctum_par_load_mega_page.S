@@ -18,7 +18,7 @@ dut_entry:
 
   ld t0, .illegal_address
   csrw 0x07C5, t0 # Set mparbase
-  li t0, 0xF0000000
+  li t0, 0xFFE00000
   csrw 0x07C6, t0 # Set mparmask
 
   /* Activate Address Translation */
@@ -49,13 +49,13 @@ dut_entry:
   mret
  
 .malicious_program: /* Tries to read at the limit of the protected range and then inside */
-  ld t0, .illegal_address // Read on next Giga page
-  li t1, 0x40000000
+  ld t0, .illegal_address // Read on next Mega page
+  li t1, 0x200000
   add t0, t0, t1
   lw zero, 0(t0)
-  ld t0, .illegal_address // Read the last address before the illegal Giga page
+  ld t0, .illegal_address // Read the last address before the illegal Mega page
   lw zero, -4(t0)
-.illegal_load: // Read the first address of the illegal Giga page
+.illegal_load: // Read the first address of the illegal Mega page
   lw zero, 0(t0)
 
   j .test_failure
@@ -81,5 +81,5 @@ dut_entry:
   jr ra /* return to  caller */
 
 .illegal_address:
-  .dword 0x00000000C0000000
+  .dword 0x0000000080200000
 

@@ -11,6 +11,21 @@ dut_entry:
     $a0 should contain:
     0 if the test FAILS
     1 if the test PASSES */
+  
+  /* Set up the stack and save ra */ 
+  la sp, stack_ptr
+  sd ra, -8(sp)
+
+  /* Copy the return instruction at legal and illegal addresses */
+  li t2, 0x8082  // RET instruction
+
+  ld t0, .illegal_address
+  li t1, 0x40000000
+  add t0, t0, t1
+  sw t2,  0(t0)
+  ld t0, .illegal_address
+  sw t2, -4(t0)
+  sw t2,  0(t0)
 
   /* Set up a trap vector */
   la t0, .default_trap_vector
@@ -18,7 +33,7 @@ dut_entry:
 
   ld t0, .illegal_address
   csrw 0x07C5, t0 # Set mparbase
-  li t0, 0xFFFFF000
+  li t0, 0xF0000000
   csrw 0x07C6, t0 # Set mparmask
 
   /* Activate Address Translation */
@@ -45,28 +60,30 @@ dut_entry:
 
   /* Set return address to malicious program mret to S-mode */
   la t0, .malicious_program
-  csrw mepc, t0
+  csrw mepc, t0 
   mret
  
 .malicious_program: /* Tries to read at the limit of the protected range and then inside */
-  ld t0, .illegal_address // Read on next Kilo page
-  li t1, 0x00001000
-  add t0, t0, t1
-  lw zero, 0(t0)
-  ld t0, .illegal_address // Read the last address before the illegal Kilo page
-  lw zero, -4(t0)
-.illegal_load: // Read the first address of the illegal Kilo page
-  lw zero, 0(t0)
+  #ld t0, .illegal_address // Read on next Giga page
+  #li t1, 0x40000000
+  #add t0, t0, t1
+  #jalr t0
+  ld t0, .illegal_address // Read the last address before the illegal Giga page
+  addi t0, t0, -4
+  jalr t0
+  ld t0, .illegal_address // Read the last address before the illegal Giga page
+.illegal_jump: // Read the first address of the illegal Giga page
+  jalr t0
 
   j .test_failure
 
 .default_trap_vector:
   csrr t0, mcause // Check this is a Load Page Fault
-  li t1, 0xD
+  li t1, 0xC
   bne t0, t1, .test_failure
 
   csrr t0, mepc   // That happend during the illegal load
-  la t1, .illegal_load
+  ld t1, .illegal_address
   bne t0, t1, .test_failure
 
   csrr t0, mtval  // On the illegal address
@@ -74,12 +91,15 @@ dut_entry:
   bne t0, t1, .test_failure
 
   li a0, 1 // The test is successful
-  jr ra
+  j .return_caller
 
 .test_failure:
   li a0, 0 // Fail this test!
+
+.return_caller:
+  ld ra, -8(sp)
   jr ra /* return to  caller */
 
 .illegal_address:
-  .dword 0x0000000080001000
+  .dword 0x00000000C0000000
 
