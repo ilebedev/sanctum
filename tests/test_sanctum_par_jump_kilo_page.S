@@ -63,22 +63,22 @@ dut_entry:
   csrw mepc, t0 
   mret
  
-.malicious_program: /* Tries to read at the limit of the protected range and then inside */
-  ld t0, .illegal_address // Read on next Kilo page
+.malicious_program: /* Tries to jump to the limit of the protected range and then inside */
+  ld t0, .illegal_address // Jump to the first address on the next Kilo page
   li t1, 0x00001000
   add t0, t0, t1
   jalr t0
-  ld t0, .illegal_address // Read the last address before the illegal Kilo page
+  ld t0, .illegal_address // Jump to the last address before the illegal Kilo page
   addi t0, t0, -4
   jalr t0
-  ld t0, .illegal_address // Read the last address before the illegal Kilo page
-.illegal_jump: // Read the first address of the illegal Kilo page
+  ld t0, .illegal_address 
+.illegal_jump: // Jump to the first address of the illegal Kilo page
   jalr t0
 
   j .test_failure
 
 .default_trap_vector:
-  csrr t0, mcause // Check this is a Load Page Fault
+  csrr t0, mcause // Check this is a Instruction Page Fault
   li t1, 0xC
   bne t0, t1, .test_failure
 

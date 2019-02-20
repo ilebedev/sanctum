@@ -48,25 +48,25 @@ dut_entry:
   csrw mepc, t0
   mret
  
-.malicious_program: /* Tries to read at the limit of the protected range and then inside */
-  ld t0, .illegal_address // Read on next Kilo page
+.malicious_program: /* Tries to write at the limit of the protected range and then inside */
+  ld t0, .illegal_address // Write on next Kilo page
   li t1, 0x00001000
   add t0, t0, t1
   sw zero, 0(t0)
-  ld t0, .illegal_address // Read the last address before the illegal Kilo page
+  ld t0, .illegal_address // Write the last address before the illegal Kilo page
   sw zero, -4(t0)
-.illegal_load: // Read the first address of the illegal Kilo page
+.illegal_store: // Write the first address of the illegal Kilo page
   sw zero, 0(t0)
 
   j .test_failure
 
 .default_trap_vector:
-  csrr t0, mcause // Check this is a Load Page Fault
+  csrr t0, mcause // Check this is a Store Page Fault
   li t1, 0xF
   bne t0, t1, .test_failure
 
-  csrr t0, mepc   // That happend during the illegal load
-  la t1, .illegal_load
+  csrr t0, mepc   // That happend during the illegal store
+  la t1, .illegal_store
   bne t0, t1, .test_failure
 
   csrr t0, mtval  // On the illegal address

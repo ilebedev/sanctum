@@ -63,16 +63,16 @@ dut_entry:
   csrw mepc, t0 
   mret
  
-.malicious_program: /* Tries to read at the limit of the protected range and then inside */
-  #ld t0, .illegal_address // Read on next Giga page
+.malicious_program: /* Tries to jump to the limit of the protected range and then inside */
+  #ld t0, .illegal_address // Jump to the first address on the next Giga page
   #li t1, 0x40000000
   #add t0, t0, t1
   #jalr t0
-  ld t0, .illegal_address // Read the last address before the illegal Giga page
+  ld t0, .illegal_address // Jump to the last address before the illegal Giga page
   addi t0, t0, -4
   jalr t0
-  ld t0, .illegal_address // Read the last address before the illegal Giga page
-.illegal_jump: // Read the first address of the illegal Giga page
+  ld t0, .illegal_address 
+.illegal_jump: // Jump to the first address of the illegal Giga page
   jalr t0
 
   j .test_failure
@@ -82,7 +82,7 @@ dut_entry:
   li t1, 0xC
   bne t0, t1, .test_failure
 
-  csrr t0, mepc   // That happend during the illegal load
+  csrr t0, mepc   // That happend during the illegal jump
   ld t1, .illegal_address
   bne t0, t1, .test_failure
 
