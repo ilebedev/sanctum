@@ -219,10 +219,10 @@ index e34a26a0ef..608fc66d9c 100644
                                   "realized", &err);
 diff --git a/hw/riscv/sanctum.c b/hw/riscv/sanctum.c
 new file mode 100644
-index 0000000000..188d4619e6
+index 0000000000..9153758949
 --- /dev/null
 +++ b/hw/riscv/sanctum.c
-@@ -0,0 +1,294 @@
+@@ -0,0 +1,299 @@
 +/*
 + * QEMU RISC-V Sanctum Emulator
 + *
@@ -280,7 +280,7 @@ index 0000000000..188d4619e6
 +    [SANCTUM_PUF] =      {   0x200000,       0x20 },
 +    [SANCTUM_ELFLD] =    {  0x1000000,     0x1000 },
 +    [SANCTUM_CLINT] =    {  0x2000000,    0x10000 },
-+    [SANCTUM_DRAM] =     { 0x80000000,        0x0 },
++    [SANCTUM_DRAM] =     { 0x80000000, 0x80000000 },
 +};
 +
 +static uint64_t load_kernel(const char *kernel_filename)
@@ -402,6 +402,11 @@ index 0000000000..188d4619e6
 +    MemoryRegion *mask_rom = g_new(MemoryRegion, 1);
 +    MemoryRegion *elfld_rom = g_new(MemoryRegion, 1);
 +    int i;
++
++    /* Ensure the requested configuration is legal for Sanctum */
++    assert(TARGET_RISCV64);
++    assert(PGSHIFT == 12);
++    assert (machine->ram_size == 0x80000000); // Due to hacks on hacks on hack emulator is only defined for a machine with 2GB DRAM and 64 "regions" for enclave isolation.
 +
 +    /* Initialize SOC */
 +    object_initialize_child(OBJECT(machine), "soc", &s->soc, sizeof(s->soc),
@@ -719,7 +724,7 @@ index 5439f4719e..58df6bac4c 100644
  #define CSR_MHPMCOUNTER3    0xb03
  #define CSR_MHPMCOUNTER4    0xb04
 diff --git a/target/riscv/cpu_helper.c b/target/riscv/cpu_helper.c
-index f257050f12..6050b7a609 100644
+index f257050f12..1012c460f5 100644
 --- a/target/riscv/cpu_helper.c
 +++ b/target/riscv/cpu_helper.c
 @@ -141,8 +141,24 @@ static int get_physical_address(CPURISCVState *env, hwaddr *physical,
@@ -748,7 +753,7 @@ index f257050f12..6050b7a609 100644
          sum = get_field(env->mstatus, MSTATUS_SUM);
          vm = get_field(env->satp, SATP_MODE);
          switch (vm) {
-@@ -208,6 +224,17 @@ restart:
+@@ -208,6 +224,34 @@ restart:
  #endif
          target_ulong ppn = pte >> PTE_PPN_SHIFT;
  
@@ -758,8 +763,25 @@ index f257050f12..6050b7a609 100644
 +            return TRANSLATE_FAIL;
 +          }
 +          // Check region permission, using address bits [30:25]
-+          if ( ( (1<<(((ppn << PGSHIFT) >> 25)&0x3F)) & mrbm ) == 0) {
-+            return TRANSLATE_FAIL;
++          // If this is a giga page (level == 0), ensure *all* relevant region permission bits are set.
++          // A bit of a hack: our enclave-capable machine has a 2GB memory
++
++          // Due to hacks on hacks on hack emulator is only defined for a machine with 2GB DRAM and 64 "regions" for enclave isolation.
++          // Memory size is asserted in hw/riscv/sanctum.c asserts that 1). Memory size is 2GB. 2). TARGET_RISCV64 3). PGSHIFT == 12
++
++          if ( (i == 0) && (pte & PTE_V) && (pte & (PTE_R | PTE_W | PTE_X)) ) { // This is a valid giga page, which spans multiple regions. This is a special case.
++            if ( ((ppn << PGSHIFT) == 0x80000000) && 0==(mrbm & 0x00000000FFFFFFFF)) { // bottom giga page
++              return TRANSLATE_FAIL;
++            }
++
++            if ( ((ppn << PGSHIFT) == 0xC0000000) && 0==(mrbm & 0xFFFFFFFF00000000)) { // top giga page
++              return TRANSLATE_FAIL;
++            }
++            // NOTE: enclave permissions are not enforced outisde DRAM
++          } else { // This may be a mega or regular page
++            if ( ( (1<<(((ppn << PGSHIFT) >> 25)&0x3F)) & mrbm ) == 0) {
++              return TRANSLATE_FAIL;
++            }
 +          }
 +        // </SANCTUM>
 +
