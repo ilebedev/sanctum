@@ -23,7 +23,7 @@ dut_entry:
   li t0, 1
   sll t0, t0, t1
   not t0, t0 # Compute corresponding bitmap
-  csrw 0x7C3, t0 # Write bitmap in MMRBM
+  csrw 0x7C3, t0 # Set mmrbm
 
   /* Activate Address Translation */
   /** Set satp mode to Sv39 and set the root page table address **/ 
@@ -53,11 +53,12 @@ dut_entry:
   mret
  
 .malicious_program: /* Tries to read at the limit of the protected range and then inside */
-  ld t0, .illegal_address // Read the last address before the illegal memory region
-  lw zero, -4(t0)
   ld t0, .illegal_address // Read on next memory region
   li t1, 0x02000000
   add t0, t0, t1
+  lw zero, 0(t0)
+  ld t0, .illegal_address // Read the last address before the illegal memory region
+  lw zero, -4(t0)
 .illegal_load: // Read the first address of the illegal memory region
   lw zero, 0(t0)
 
@@ -72,10 +73,8 @@ dut_entry:
   la t1, .illegal_load
   bne t0, t1, .test_failure
 
-  csrr t0, mtval  // On the next memory region after the illegal address
+  csrr t0, mtval  // On the illegal address
   ld t1, .illegal_address
-  li t2, 0x02000000
-  add t1, t1, t2
   bne t0, t1, .test_failure
 
   li a0, 1 // The test is successful
@@ -86,5 +85,5 @@ dut_entry:
   jr ra /* return to  caller */
 
 .illegal_address:
-  .dword 0x00000000C0000000
+  .dword 0x0000000082000000
 
