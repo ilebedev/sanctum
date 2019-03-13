@@ -13,3 +13,6 @@
 [submodule "secure_bootloader"]
 	path = secure_bootloader
 	url = git@github.com:ilebedev/secure_bootloader.git
+[submodule "enclaves/voting_machine_enclave"]
+	path = enclaves/voting_machine_enclave
+	url = git@github.com:jdrean/voting_machine_enclave.git
