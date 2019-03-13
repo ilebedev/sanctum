@@ -19,3 +19,6 @@
 [submodule "enclaves/attestation_enclave"]
 	path = enclaves/attestation_enclave
 	url = git@github.com:ilebedev/attestation_enclave.git
+[submodule "common"]
+	path = common
+	url = git@github.com:ilebedev/sanctum_common.git
