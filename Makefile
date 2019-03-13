@@ -6,6 +6,7 @@ BUILD_DIR := $(SANCTUM_DIR)/build
 SCRIPTS_DIR := $(SANCTUM_DIR)/scripts
 TESTS_DIR := $(SANCTUM_DIR)/tests
 IDPT_DIR := $(SANCTUM_DIR)/tools/idpt
+SECURE_BOOTLOADER_DIR := $(SANCTUM_DIR)/secure_bootloader
 
 TEST_NAMES :=  $(notdir $(basename $(wildcard $(SANCTUM_DIR)/tests/test_*)))
 TEST_ELFS := $(addprefix $(BUILD_DIR)/tests/, $(addsuffix .test.elf, $(TEST_NAMES)))
@@ -14,8 +15,13 @@ OBJECTS := $(addprefix $(BUILDDIR)/,$(SOURCES:%.c=%.o))
 
 QEMU := $(BUILD_DIR)/qemu/riscv64-softmmu/qemu-system-riscv64
 IDPT := $(TESTS_DIR)/idpt.bin
+SECURE_BOOTLOADER_ELF := $(BUILD_DIR)/secure_bootloader/secure_bootloader.elf
+SECURE_BOOTLOADER_BIN := $(BUILD_DIR)/secure_bootloader/secure_bootloader.bin
 
 CC := riscv64-unknown-elf-gcc
+OBJCOPY= riscv64-unknown-elf-objcopy
+READELF= riscv64-unknown-elf-readelf
+STRIP= riscv64-unknown-elf-strip
 
 .PHONY: all clean test qemu tools linux
 
@@ -25,6 +31,38 @@ all: $(QEMU) test
 clean:
 	rm -rf build
 	rm $(IDPT)
+
+SECURE_BOOTLOADER_SRCS := \
+	$(SECURE_BOOTLOADER_DIR)/bootloader.S \
+	$(SECURE_BOOTLOADER_DIR)/bootloader.c \
+	$(SECURE_BOOTLOADER_DIR)/stack.S \
+	$(SECURE_BOOTLOADER_DIR)/boot_api.c \
+	$(SECURE_BOOTLOADER_DIR)/boot_api.c \
+	$(SECURE_BOOTLOADER_DIR)/sha3/sha3.c \
+	$(SECURE_BOOTLOADER_DIR)/randomart/randomart.c \
+	$(SECURE_BOOTLOADER_DIR)/platform/sanctum.c \
+	$(SECURE_BOOTLOADER_DIR)/htif/htif.c \
+	$(SECURE_BOOTLOADER_DIR)/ed25519/fe.c \
+	$(SECURE_BOOTLOADER_DIR)/ed25519/ge.c \
+	$(SECURE_BOOTLOADER_DIR)/ed25519/keypair.c \
+	$(SECURE_BOOTLOADER_DIR)/ed25519/sc.c \
+	$(SECURE_BOOTLOADER_DIR)/ed25519/sign.c \
+	$(SECURE_BOOTLOADER_DIR)/clib/snprintf.c \
+	$(SECURE_BOOTLOADER_DIR)/clib/memset.c \
+	$(SECURE_BOOTLOADER_DIR)/aes/aes.c \
+
+$(SECURE_BOOTLOADER_ELF): $(SECURE_BOOTLOADER_SRCS) $(SECURE_BOOTLOADER_DIR)/secure_bootloader.lds
+	# create a build directory if one does not exist
+	mkdir -p $(BUILD_DIR)/secure_bootloader
+	# compile the secure bootloader ELF
+	cd $(SECURE_BOOTLOADER_DIR) && $(CC) -T secure_bootloader.lds -march=rv64g -mabi=lp64 -nostdlib -nostartfiles -fno-common -std=gnu11 -static -fPIC -g -O0 -Wall $(SECURE_BOOTLOADER_SRCS) -o $(SECURE_BOOTLOADER_ELF)
+	# extract a binary image from the ELF
+
+$(SECURE_BOOTLOADER_BIN): $(SECURE_BOOTLOADER_ELF)
+		$(OBJCOPY) -O binary --only-section=rom $< $@
+
+.PHONY: secure_bootloader
+secure_bootloader: $(SECURE_BOOTLOADER_BIN)
 
 .PHONY: idpt
 idpt: $(IDPT)

@@ -16,3 +16,6 @@
 [submodule "enclaves/voting_machine_enclave"]
 	path = enclaves/voting_machine_enclave
 	url = git@github.com:jdrean/voting_machine_enclave.git
+[submodule "enclaves/attestation_enclave"]
+	path = enclaves/attestation_enclave
+	url = git@github.com:ilebedev/attestation_enclave.git
