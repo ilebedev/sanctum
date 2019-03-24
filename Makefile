@@ -11,26 +11,26 @@ SECURE_BOOTLOADER_DIR := $(SANCTUM_DIR)/secure_bootloader
 TEST_NAMES :=  $(notdir $(basename $(wildcard $(SANCTUM_DIR)/tests/test_*)))
 TEST_ELFS := $(addprefix $(BUILD_DIR)/tests/, $(addsuffix .test.elf, $(TEST_NAMES)))
 TEST_TASKS := $(addsuffix .test.task, $(TEST_NAMES))
-OBJECTS := $(addprefix $(BUILDDIR)/,$(SOURCES:%.c=%.o))
+OBJECTS := $(addprefix $(BUILD_DIR)/,$(SOURCES:%.c=%.o))
 
 QEMU := $(BUILD_DIR)/qemu/riscv64-softmmu/qemu-system-riscv64
 IDPT := $(TESTS_DIR)/idpt.bin
 SECURE_BOOTLOADER_ELF := $(BUILD_DIR)/secure_bootloader/secure_bootloader.elf
 SECURE_BOOTLOADER_BIN := $(BUILD_DIR)/secure_bootloader/secure_bootloader.bin
 
-CC := riscv64-unknown-elf-gcc
-OBJCOPY= riscv64-unknown-elf-objcopy
-READELF= riscv64-unknown-elf-readelf
-STRIP= riscv64-unknown-elf-strip
+CC := $(BUILD_DIR)/riscv-gnu-toolchain/bin/riscv64-unknown-elf-gcc
+OBJCOPY= $(BUILD_DIR)/riscv-gnu-toolchain/bin/riscv64-unknown-elf-objcopy
+READELF= $(BUILD_DIR)/riscv-gnu-toolchain/bin/riscv64-unknown-elf-readelf/buil
+STRIP= $(BUILD_DIR)/riscv-gnu-toolchain/bin/riscv64-unknown-elf-strip
 
 .PHONY: all clean test qemu tools linux
 
 all: $(QEMU) test
 
 # High-level targets
-clean:
-	rm -rf build
-	rm $(IDPT)
+#clean:
+#	rm -rf build
+#	rm $(IDPT)
 
 SECURE_BOOTLOADER_SRCS := \
 	$(SECURE_BOOTLOADER_DIR)/bootloader.S \
@@ -90,3 +90,21 @@ $(QEMU):
 	mkdir -p $(BUILD_DIR)/qemu
 	cd $(BUILD_DIR)/qemu && $(SANCTUM_DIR)/tools/qemu/configure --target-list=riscv64-softmmu
 	cd $(BUILD_DIR)/qemu && make
+
+.PHONY: build-tools
+build-tools: $(CC)
+
+$(STRIP): $(CC)
+$(READELF): $(CC)
+$(OBJCOPY): $(CC)
+
+$(CC):
+	cd $(SANCTUM_DIR) && git submodule update --init --recursive tools/riscv-gnu-toolchain
+	cd $(SANCTUM_DIR)/tools/riscv-gnu-toolchain && git apply $(SCRIPTS_DIR)/riscv-gnu-toolchain.patch
+	mkdir -p $(BUILD_DIR)/riscv-gnu-toolchain
+	cd $(BUILD_DIR)/riscv-gnu-toolchain && $(SANCTUM_DIR)/tools/riscv-gnu-toolchain/configure --prefix $(BUILD_DIR)/riscv-gnu-toolchain/
+	cd $(BUILD_DIR)/riscv-gnu-toolchain && make
+
+debug-% :
+	@echo $* = $($*)
+
