@@ -1,0 +1,28 @@
+# ## QEMU
+
+# Export tool binaries paths
+QEMU := $(BUILD_DIR)/qemu/riscv64-softmmu/qemu-system-riscv64
+
+# Targets to checkout the dependencies submodule
+QEMU_SUBMODULE := $(SANCTUM_DIR)/tools/qemu/configure
+$(QEMU_SUBMODULE):
+	@echo "Checking out the qemu submodule"
+	cd $(SANCTUM_DIR) && git submodule update --init --recursive tools/qemu
+
+# Targets to patch the dependencies submodule
+QEMU_PATCH_APPLIED := $(SANCTUM_DIR)/tools/qemu/.sanctum_patch_applied
+$(QEMU_PATCH_APPLIED): $(QEMU_SUBMODULE)  $(SCRIPTS_DIR)/qemu.patch
+	@echo "Patching out the qemu submodule"
+	cd $(SANCTUM_DIR)/tools/qemu && git apply $(SCRIPTS_DIR)/qemu.patch
+
+# Target to build the dependencies
+.PHONY: qemu
+$(QEMU): $(QEMU_PATCH_APPLIED)
+	@echo "Building the patched qemu submodule"
+	mkdir -p $(BUILD_DIR)/qemu
+	cd $(BUILD_DIR)/qemu && $(SANCTUM_DIR)/tools/qemu/configure --target-list=riscv64-softmmu
+	cd $(BUILD_DIR)/qemu && make
+
+# Export target shorthand
+.PHONY: qemu
+qemu: $(QEMU)

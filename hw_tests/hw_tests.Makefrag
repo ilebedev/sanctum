@@ -1,0 +1,21 @@
+HW_TESTS_DIR := $(SANCTUM_DIR)/hw_tests
+HW_TEST_NAMES :=  $(notdir $(basename $(wildcard $(SANCTUM_DIR)/hw_tests/test_*)))
+HW_TEST_ELFS := $(addprefix $(BUILD_DIR)/hw_tests/, $(addsuffix .hw_test.elf, $(HW_TEST_NAMES)))
+HW_TEST_TASKS := $(addsuffix .hw_test.task, $(HW_TEST_NAMES))
+HW_TESTS_IDPT := $(BUILD_DIR)/hw_tests/idpt.bin
+
+$(HW_TESTS_IDPT): $(HW_TESTS_DIR)/make_idpt.py
+	@echo "Building an identity page tables for hw_tests"
+	mkdir -p $(BUILD_DIR)/hw_tests
+	cd $(BUILD_DIR)/hw_tests && python $(HW_TESTS_DIR)/make_idpt.py
+
+.PHONY: hw_test
+hw_test: $(QEMU) $(HW_TESTS_IDPT) $(HW_TEST_TASKS)
+	@echo "All the test cases in $(SANCTUM_DIR)/hw_test have been run."
+	@echo "The tests were: $(HW_TEST_NAMES)"
+
+.PHONY: %.hw_test.task
+%.hw_test.task: $(QEMU) $(HW_TESTS_IDPT)
+	mkdir -p $(BUILD_DIR)/hw_tests
+	cd $(HW_TESTS_DIR) && $(CC) -T infrastructure.lds -I $(BUILD_DIR)/hw_tests -march=rv64g -mabi=lp64 -nostdlib -nostartfiles -fno-common -std=gnu11 -static -fPIC -g -O0 -Wall infrastructure.c $*.S -o $(BUILD_DIR)/hw_tests/$*.elf
+	- cd $(BUILD_DIR)/hw_tests && $(QEMU) -machine sanctum -m 2G -nographic -kernel $*.elf

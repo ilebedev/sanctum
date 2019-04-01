@@ -1,0 +1,35 @@
+# ## Build Tools: compilers, debuggers, etc.
+
+# Export tool binaries paths
+CC := $(BUILD_DIR)/riscv-gnu-toolchain/bin/riscv64-unknown-elf-gcc
+OBJCOPY := $(BUILD_DIR)/riscv-gnu-toolchain/bin/riscv64-unknown-elf-objcopy
+READELF := $(BUILD_DIR)/riscv-gnu-toolchain/bin/riscv64-unknown-elf-readelf/buil
+STRIP := $(BUILD_DIR)/riscv-gnu-toolchain/bin/riscv64-unknown-elf-strip
+
+# Targets to checkout the dependencies submodule
+BUILD_TOOLS_SUBMODULE := $(SANCTUM_DIR)/tools/riscv-gnu-toolchain/configure
+$(BUILD_TOOLS_SUBMODULE):
+	@echo "Checking out the riscv-gnu-toolchain submodule"
+	cd $(SANCTUM_DIR) && git submodule update --init --recursive tools/riscv-gnu-toolchain
+
+# Targets to patch the dependencies submodule
+BUILD_TOOLS_PATCH_APPLIED := $(SANCTUM_DIR)/tools/riscv-gnu-toolchain/.sanctum_patch_applied
+$(BUILD_TOOLS_PATCH_APPLIED): $(BUILD_TOOLS_SUBMODULE)  $(SCRIPTS_DIR)/riscv-gnu-toolchain.patch
+	@echo "Patching the riscv-gnu-toolchain submodule"
+	cd $(SANCTUM_DIR)/tools/riscv-gnu-toolchain && git apply $(SCRIPTS_DIR)/riscv-gnu-toolchain.patch
+
+# Target to build the dependencies
+$(CC): $(BUILD_TOOLS_PATCH_APPLIED)
+	@echo "Building the patched riscv-gnu-toolchain submodule"
+	mkdir -p $(BUILD_DIR)/riscv-gnu-toolchain
+	cd $(BUILD_DIR)/riscv-gnu-toolchain &&  $(SANCTUM_DIR)/tools/riscv-gnu-toolchain/configure --prefix $(BUILD_DIR)/riscv-gnu-toolchain/
+	cd $(BUILD_DIR)/riscv-gnu-toolchain && make
+
+# Register dependencies for missing tool binaries
+$(READELF): $(CC)
+$(OBJCOPY): $(CC)
+$(STRIP): $(CC)
+
+# Export target shorthand
+.PHONY: build-tools
+build-tools: $(CC)
