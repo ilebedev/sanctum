@@ -12,7 +12,7 @@ $(QEMU_SUBMODULE):
 # Targets to patch the dependencies submodule
 QEMU_PATCH_APPLIED := $(SANCTUM_DIR)/tools/qemu/.sanctum_patch_applied
 $(QEMU_PATCH_APPLIED): $(QEMU_SUBMODULE)  $(SCRIPTS_DIR)/qemu.patch
-	@echo "Patching out the qemu submodule"
+	@echo "Patching the qemu submodule"
 	cd $(SANCTUM_DIR)/tools/qemu && git apply $(SCRIPTS_DIR)/qemu.patch
 
 # Target to build the dependencies

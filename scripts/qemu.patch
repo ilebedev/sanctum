@@ -1,3 +1,10 @@
+diff --git a/.sanctum_patch_applied b/.sanctum_patch_applied
+new file mode 100644
+index 0000000000..6d04af0d0b
+--- /dev/null
++++ b/.sanctum_patch_applied
+@@ -0,0 +1 @@
++Patched with patch file dating back to revision 50660ebd41e189051592bcb2d778a645f9e67b7c of git@github.com:ilebedev/sanctum.git
 diff --git a/Makefile b/Makefile
 index a9ac16d94e..b730dcfc0d 100644
 --- a/Makefile

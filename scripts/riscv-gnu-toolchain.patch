@@ -1,12 +1,10 @@
-From 041366345538b4d2268172b8849fa829c07a3e67 Mon Sep 17 00:00:00 2001
-From: Ilia Lebedev <ilebedev@mit.edu>
-Date: Tue, 22 Jan 2019 10:50:20 -0500
-Subject: [PATCH] added GDB ncurses GUI option
-
----
- Makefile.in | 2 ++
- 1 file changed, 2 insertions(+)
-
+diff --git a/.sanctum_patch_applied b/.sanctum_patch_applied
+new file mode 100644
+index 0000000..3d1f86b
+--- /dev/null
++++ b/.sanctum_patch_applied
+@@ -0,0 +1 @@
++Patched with patch file dating back to revision 50660ebd41e189051592bcb2d778a645f9e67b7c of git@github.com:ilebedev/sanctum.git
 diff --git a/Makefile.in b/Makefile.in
 index f4d771c..5cb66ef 100644
 --- a/Makefile.in
@@ -17,5 +15,3 @@ index f4d771c..5cb66ef 100644
  srcdir := @abs_top_srcdir@
  builddir := @abs_top_builddir@
  INSTALL_DIR := @prefix@
---
-2.18.0

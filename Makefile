@@ -41,6 +41,11 @@ clean-all:
 
 # TODO: create *.in target - copy from SSITH
 
+#????
+#??? Import .h file in a Makefile ??
+#??? Or create *h.in ?
+#?????
+
 # Debug target to help debug errors in the Makefile
 # -------------------------------------------------
 debug-% :
