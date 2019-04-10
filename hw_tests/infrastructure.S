@@ -7,6 +7,19 @@ entry:
 /* Clear a0 */
 li a0, 0
 
+/* Initialize Sanctum CSRs */
+
+li t0, 0
+li t1, 0xFFFFFFFFFFFFFFFF
+
+csrw 0x7c0, t1 // Write MEVBASE
+csrw 0x7c1, t0 // Write MEVMASK
+
+csrw 0x7c3, t1 // Write MMRBM
+
+csrw 0x7c5, t1 // Write MPARBASE
+csrw 0x7c6, t0 // Write MPARMASK
+
 /* Call into design under test */
 call dut_entry
 la sp, stack_ptr
