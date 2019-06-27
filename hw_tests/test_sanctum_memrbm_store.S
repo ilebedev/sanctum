@@ -29,7 +29,7 @@ dut_entry:
   csrw 0x07C8, t0 # Set meparmask
   
   /* Set MEMRBM */
-  ld t1, .illegal_address # Compute illegal memory region corresponding to the address
+  la t1, _illegal_address_region # Compute illegal memory region corresponding to the address
   srli t1, t1, 25
   andi t1, t1, 0x3F
   li t0, 1
@@ -67,11 +67,11 @@ dut_entry:
   mret
  
 .malicious_program: /* Tries to write at the limit of the protected range and then inside */
-  ld t0, .illegal_address // Write on next memory region
+  la t0, _illegal_address_region // Write on next memory region
   li t1, 0x02000000
   add t0, t0, t1
   sw zero, 0(t0)
-  ld t0, .illegal_address // Write the last address before the illegal memory region
+  la t0, _illegal_address_region // Write the last address before the illegal memory region
   sw zero, -4(t0)
 .illegal_store: // Write the first address of the illegal memory region
   sw zero, 0(t0)
@@ -88,7 +88,7 @@ dut_entry:
   bne t0, t1, .test_failure
 
   csrr t0, mtval  // On the illegal address
-  ld t1, .illegal_address
+  la t1, _illegal_address_region
   bne t0, t1, .test_failure
 
   li a0, 1 // The test is successful
@@ -97,7 +97,3 @@ dut_entry:
 .test_failure:
   li a0, 0 // Fail this test!
   jr ra /* return to  caller */
-
-.illegal_address:
-  .dword 0x0000000082000000
-

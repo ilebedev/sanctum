@@ -17,22 +17,24 @@ dut_entry:
   sd ra, -8(sp)
 
   /* Copy the return instruction at legal and illegal addresses */
-  li t2, 0x8082  // RET instruction
+  li t2, 0x8067  // RET instruction
 
-  ld t0, .illegal_address
+  la t0, _illegal_address_region
   li t1, 0x02000000
   add t0, t0, t1
   sw t2,  0(t0)
-  ld t0, .illegal_address
+  la t0, _illegal_address_region
   sw t2, -4(t0)
   sw t2,  0(t0)
 
+  fence.i
+  
   /* Set up a trap vector */
   la t0, .default_trap_vector
   csrw mtvec, t0
 
   /* Set MMRBM */
-  ld t1, .illegal_address # Compute illegal memory region corresponding to the address
+  la t1, _illegal_address_region # Compute illegal memory region corresponding to the address
   srli t1, t1, 25
   andi t1, t1, 0x3F
   li t0, 1
@@ -68,14 +70,14 @@ dut_entry:
   mret
  
 .malicious_program: /* Tries to read at the limit of the protected range and then inside */
-  ld t0, .illegal_address // Jump to the next memory region
+  la t0, _illegal_address_region
   li t1, 0x02000000
   add t0, t0, t1
   jalr t0
-  ld t0, .illegal_address // Jump to the last address before the illegal memory region
+  la t0, _illegal_address_region
   addi t0, t0, -4
   jalr t0
-  ld t0, .illegal_address
+  la t0, _illegal_address_region
 .illegal_jump: // Jump to the first address of the illegal memory region
   jalr t0
 
@@ -87,11 +89,11 @@ dut_entry:
   bne t0, t1, .test_failure
 
   csrr t0, mepc   // That happend during the illegal jump
-  ld t1, .illegal_address
+  la t1, _illegal_address_region
   bne t0, t1, .test_failure
 
   csrr t0, mtval  // On the illegal address
-  ld t1, .illegal_address
+  la t1, _illegal_address_region
   bne t0, t1, .test_failure
 
   li a0, 1 // The test is successful
@@ -103,7 +105,3 @@ dut_entry:
 .return_caller:
   ld ra, -8(sp)
   jr ra /* return to  caller */
-
-.illegal_address:
-  .dword 0x0000000082000000
-

@@ -8,6 +8,10 @@ BUILD_DIR := $(SANCTUM_DIR)/build
 SCRIPTS_DIR := $(SANCTUM_DIR)/scripts
 COMMON_DIR := $(SANCTUM_DIR)/common
 
+CFLAGS := -march=rv64g -mabi=lp64 -nostdlib -nostartfiles -fno-common -std=gnu11 -static -fPIC -O0 -Wall
+CFLAGS += -g
+QEMU_FLAGS := -machine sanctum -m 2G -nographic
+
 # Dependencies
 # ------------
 include $(SCRIPTS_DIR)/qemu.Makefrag
@@ -16,8 +20,8 @@ include $(SCRIPTS_DIR)/riscv-gnu-toolchain.Makefrag
 
 # Project targets
 # -----------------
-include $(SANCTUM_DIR)/secure_bootloader/secure_bootloader.Makefrag
-#include $(SANCTUM_DIR)/security_monitor/security_monitor.Makefrag
+#include $(SANCTUM_DIR)/secure_bootloader/secure_bootloader.Makefrag
+include $(SANCTUM_DIR)/security_monitor/security_monitor.Makefrag
 include $(SANCTUM_DIR)/hw_tests/hw_tests.Makefrag
 
 # Top-level targets
@@ -27,6 +31,7 @@ include $(SANCTUM_DIR)/hw_tests/hw_tests.Makefrag
 all: $(QEMU) test
 
 test: hw_test
+build-tests: make_elfs
 
 clean:
 	-rm -rf $(BUILD_DIR)/secure_bootloader

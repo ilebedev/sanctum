@@ -47,6 +47,7 @@ j .halt
 .halt:
   j .halt /* spin forever, for now */
 
+  .align 4
 stack_base:
   .skip 128
 stack_ptr:

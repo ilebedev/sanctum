@@ -25,7 +25,7 @@ dut_entry:
   li t0, 0xFFFFFFFFFFFFFFFF
   csrw 0x07C4, t0  # Set memrbm
 
-  ld t0, .illegal_address
+  la t0, _illegal_address_kilo
   csrw 0x07C7, t0 # Set meparbase
   li t0, 0xFFFFF000
   csrw 0x07C8, t0 # Set meparmask
@@ -60,11 +60,11 @@ dut_entry:
   mret
  
 .malicious_program: /* Tries to read at the limit of the protected range and then inside */
-  ld t0, .illegal_address // Read on next Kilo page
+  la t0, _illegal_address_kilo // Read on next Kilo page
   li t1, 0x00001000
   add t0, t0, t1
   lw zero, 0(t0)
-  ld t0, .illegal_address // Read the last address before the illegal Kilo page
+  la t0, _illegal_address_kilo // Read the last address before the illegal Kilo page
   lw zero, -4(t0)
 .illegal_load: // Read the first address of the illegal Kilo page
   lw zero, 0(t0)
@@ -81,7 +81,7 @@ dut_entry:
   bne t0, t1, .test_failure
 
   csrr t0, mtval  // On the illegal address
-  ld t1, .illegal_address
+  la t1, _illegal_address_kilo
   bne t0, t1, .test_failure
 
   li a0, 1 // The test is successful
@@ -90,7 +90,3 @@ dut_entry:
 .test_failure:
   li a0, 0 // Fail this test!
   jr ra /* return to  caller */
-
-.illegal_address:
-  .dword 0x0000000080001000
-

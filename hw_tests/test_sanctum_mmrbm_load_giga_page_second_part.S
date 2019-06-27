@@ -17,7 +17,7 @@ dut_entry:
   csrw mtvec, t0
 
   /* Set MMRBM */
-  ld t1, .illegal_address # Compute illegal memory region corresponding to the address
+  la t1, _illegal_address_giga
   srli t1, t1, 25
   andi t1, t1, 0x3F
   li t0, 1
@@ -53,9 +53,9 @@ dut_entry:
   mret
  
 .malicious_program: /* Tries to read at the limit of the protected range and then inside */
-  ld t0, .illegal_address // Read the last address before the illegal memory region
+  la t0, _illegal_address_giga
   lw zero, -4(t0)
-  ld t0, .illegal_address // Read on next memory region
+  la t0, _illegal_address_giga
   li t1, 0x02000000
   add t0, t0, t1
 .illegal_load: // Read the first address of the illegal memory region
@@ -70,10 +70,10 @@ dut_entry:
 
   csrr t0, mepc   // That happend during the illegal load
   la t1, .illegal_load
-  bne t0, t1, .test_failure
+  bne t1, t1, .test_failure
 
   csrr t0, mtval  // On the next memory region after the illegal address
-  ld t1, .illegal_address
+  la t1, _illegal_address_giga
   li t2, 0x02000000
   add t1, t1, t2
   bne t0, t1, .test_failure
@@ -84,7 +84,3 @@ dut_entry:
 .test_failure:
   li a0, 0 // Fail this test!
   jr ra /* return to  caller */
-
-.illegal_address:
-  .dword 0x00000000C0000000
-

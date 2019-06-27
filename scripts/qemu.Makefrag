@@ -21,7 +21,7 @@ $(QEMU): $(QEMU_PATCH_APPLIED)
 	@echo "Building the patched qemu submodule"
 	mkdir -p $(BUILD_DIR)/qemu
 	cd $(BUILD_DIR)/qemu && $(SANCTUM_DIR)/tools/qemu/configure --target-list=riscv64-softmmu
-	cd $(BUILD_DIR)/qemu && make
+	cd $(BUILD_DIR)/qemu && make -j4
 
 # Export target shorthand
 .PHONY: qemu

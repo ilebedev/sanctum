@@ -17,16 +17,18 @@ dut_entry:
   sd ra, -8(sp)
 
   /* Copy the return instruction at legal and illegal addresses */
-  li t2, 0x8082  // RET instruction
+  li t2, 0x8067  // RET instruction
 
-  ld t0, .illegal_address
+  la t0, _illegal_address_giga
   li t1, 0x40000000
   add t0, t0, t1
   sw t2,  0(t0)
-  ld t0, .illegal_address
+  la t0, _illegal_address_giga
   sw t2, -4(t0)
   sw t2,  0(t0)
 
+  fence.i
+  
   /* Set up a trap vector */
   la t0, .default_trap_vector
   csrw mtvec, t0
@@ -40,7 +42,7 @@ dut_entry:
   li t0, 0xFFFFFFFFFFFFFFFF
   csrw 0x07C4, t0  # Set memrbm
 
-  ld t0, .illegal_address
+  la t0, _illegal_address_giga
   csrw 0x07C7, t0 # Set meparbase
   li t0, 0xF0000000
   csrw 0x07C8, t0 # Set meparmask
@@ -79,10 +81,10 @@ dut_entry:
   #li t1, 0x40000000
   #add t0, t0, t1
   #jalr t0
-  ld t0, .illegal_address // Jump to the last address before the illegal Giga page
+  la t0, _illegal_address_giga // Jump to the last address before the illegal Giga page
   addi t0, t0, -4
   jalr t0
-  ld t0, .illegal_address 
+  la t0, _illegal_address_giga
 .illegal_jump: // Jump to the first address of the illegal Giga page
   jalr t0
 
@@ -94,11 +96,11 @@ dut_entry:
   bne t0, t1, .test_failure
 
   csrr t0, mepc   // That happend during the illegal jump
-  ld t1, .illegal_address
+  la t1, _illegal_address_giga
   bne t0, t1, .test_failure
 
   csrr t0, mtval  // On the illegal address
-  ld t1, .illegal_address
+  la t1, _illegal_address_giga
   bne t0, t1, .test_failure
 
   li a0, 1 // The test is successful
@@ -110,7 +112,3 @@ dut_entry:
 .return_caller:
   ld ra, -8(sp)
   jr ra /* return to  caller */
-
-.illegal_address:
-  .dword 0x00000000C0000000
-

@@ -25,7 +25,7 @@ dut_entry:
   li t0, 0xFFFFFFFFFFFFFFFF
   csrw 0x07C4, t0  # Set memrbm
 
-  ld t0, .illegal_address
+  la t0, _illegal_address_giga
   csrw 0x07C7, t0 # Set meparbase
   li t0, 0xF0000000
   csrw 0x07C8, t0 # Set meparmask
@@ -60,11 +60,11 @@ dut_entry:
   mret
  
 .malicious_program: /* Tries to write at the limit of the protected range and then inside */
-  ld t0, .illegal_address // Write on next Giga page
+  la t0, _illegal_address_giga // Write on next Giga page
   li t1, 0x40000000
   add t0, t0, t1
   sw zero, 0(t0)
-  ld t0, .illegal_address // Write the last address before the illegal Giga page
+  la t0, _illegal_address_giga // Write the last address before the illegal Giga page
   sw zero, -4(t0)
 .illegal_store: // Write the first address of the illegal Giga page
   sw zero, 0(t0)
@@ -81,7 +81,7 @@ dut_entry:
   bne t0, t1, .test_failure
 
   csrr t0, mtval  // On the illegal address
-  ld t1, .illegal_address
+  la t1, _illegal_address_giga
   bne t0, t1, .test_failure
 
   li a0, 1 // The test is successful
@@ -90,7 +90,3 @@ dut_entry:
 .test_failure:
   li a0, 0 // Fail this test!
   jr ra /* return to  caller */
-
-.illegal_address:
-  .dword 0x00000000C0000000
-
